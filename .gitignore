@@ -1,0 +1,7 @@
+# Exports de données de prospection : ne jamais committer de données réelles
+secteurimmo-*.json
+secteurimmo-*.csv
+export*.json
+export*.csv
+node_modules/
+*.log
