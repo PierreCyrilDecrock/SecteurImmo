@@ -10,15 +10,19 @@
 var Statuts = (function () {
   'use strict';
 
-  // Couleur + contour en pointillés + icône : on ne se fie pas à la seule teinte (daltonisme)
+  // Couleur + contour en pointillés + icône : on ne se fie pas à la seule teinte (daltonisme).
+  // Couleurs de la palette catégorielle validée (écart daltoniens ≥ 8 entre voisines, vérifié par
+  // scripts/validate_palette.js du skill dataviz) ; `couleurSombre` = variante pour le thème sombre.
+  // Ordre d'empilement des graphiques : prospectus, absent, contact, rappeler, refus (voir ORDRE_GRAPHIQUE).
   var LISTE = [
-    { id: 'aucun',      label: 'Non fait',          couleur: '#9aa5b1', contour: '#5f6b76', tirets: null,       icone: '' },
-    { id: 'prospectus', label: 'Prospectus déposé', couleur: '#1e88e5', contour: '#0d47a1', tirets: '6 3',      icone: '📬' },
-    { id: 'contact',    label: 'Contact personnel', couleur: '#2e9d4f', contour: '#1b5e20', tirets: null,       icone: '💬' },
-    { id: 'absent',     label: 'Absent / à repasser', couleur: '#fb8c00', contour: '#bf5b00', tirets: '2 4',    icone: '🚪' },
-    { id: 'refus',      label: 'Refus / Stop pub',  couleur: '#d32f2f', contour: '#7f0000', tirets: '10 3 2 3', icone: '⛔' },
-    { id: 'rappeler',   label: 'À rappeler',        couleur: '#8e24aa', contour: '#4a148c', tirets: '1 5',      icone: '📞' }
+    { id: 'aucun',      label: 'Non fait',            couleur: '#9aa5b1', couleurSombre: '#9aa5b1', contour: '#5f6b76', tirets: null,       icone: '' },
+    { id: 'prospectus', label: 'Prospectus déposé',   couleur: '#2a78d6', couleurSombre: '#3987e5', contour: '#154a8f', tirets: '6 3',      icone: '📬' },
+    { id: 'contact',    label: 'Contact personnel',   couleur: '#1baf7a', couleurSombre: '#199e70', contour: '#0b6b49', tirets: null,       icone: '💬' },
+    { id: 'absent',     label: 'Absent / à repasser', couleur: '#eb6834', couleurSombre: '#d95926', contour: '#9a3a14', tirets: '2 4',      icone: '🚪' },
+    { id: 'refus',      label: 'Refus / Stop pub',    couleur: '#e34948', couleurSombre: '#e66767', contour: '#8f1f1f', tirets: '10 3 2 3', icone: '⛔' },
+    { id: 'rappeler',   label: 'À rappeler',          couleur: '#6250d6', couleurSombre: '#9085e9', contour: '#3d2f87', tirets: '1 5',      icone: '📞' }
   ];
+  var ORDRE_GRAPHIQUE = ['prospectus', 'absent', 'contact', 'rappeler', 'refus'];
   var parId = {};
   LISTE.forEach(function (s) { parId[s.id] = s; });
 
@@ -157,7 +161,7 @@ var Statuts = (function () {
 
   return {
     charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
-    LISTE: LISTE, parId: function (id) { return parId[id] || parId.aucun; },
+    LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, parId: function (id) { return parId[id] || parId.aucun; },
     get: get, statutDe: statutDe, modifier: modifier, annuler: annuler, peutAnnuler: peutAnnuler,
     surChangement: surChangement, maintenant: maintenant,
     ajouterManuel: ajouterManuel, supprimerManuel: supprimerManuel,

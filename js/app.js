@@ -22,6 +22,7 @@
   Secteurs.init(carte, alerter);
   SecteursUi.init(alerter);
   Outils.init(carte);
+  StatsUi.init(alerter);
   Secteurs.surStructure(function () { Store.enregistrerSecteurs(Secteurs.exporter()); });
 
   // ---- Restauration depuis la base locale, puis sauvegarde automatique ----

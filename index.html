@@ -37,6 +37,29 @@
     <strong>Légende</strong> <small>(décochez pour masquer)</small>
   </div>
 
+  <!-- Statistiques -->
+  <button type="button" id="btn-stats" aria-pressed="false" title="Statistiques de prospection">📊</button>
+  <section id="stats" hidden aria-label="Statistiques de prospection">
+    <header class="stats-entete">
+      <h2>Statistiques</h2>
+      <label class="case-inline"><input type="checkbox" id="stats-demo"> Données de démonstration</label>
+      <button type="button" id="stats-fermer" aria-label="Fermer les statistiques">✕</button>
+    </header>
+    <div id="stats-demo-bandeau" hidden>Données de démonstration : elles sont fictives, jamais enregistrées, et vos vraies données ne sont pas modifiées.</div>
+    <div class="stats-filtres">
+      <label>Période
+        <select id="stats-periode">
+          <option value="0">Tout</option><option value="7">7 derniers jours</option>
+          <option value="30">30 derniers jours</option><option value="90">90 derniers jours</option>
+        </select>
+      </label>
+      <label>Secteur <select id="stats-secteur"></select></label>
+    </div>
+    <div id="stats-onglets" role="tablist" aria-label="Rubriques"></div>
+    <div id="stats-contenu" role="tabpanel"></div>
+  </section>
+  <div id="stats-tip" role="tooltip" hidden></div>
+
   <!-- Secteurs de prospection -->
   <button type="button" id="btn-secteurs" aria-pressed="false" title="Secteurs : couverture et avancement">🗺</button>
   <div id="secteurs" hidden>
@@ -96,6 +119,8 @@
   <script src="js/panneau.js"></script>
   <script src="js/secteurs.js"></script>
   <script src="js/secteurs-ui.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/stats-ui.js"></script>
   <script src="js/outils.js"></script>
   <script src="js/store.js"></script>
   <script src="js/echange.js"></script>

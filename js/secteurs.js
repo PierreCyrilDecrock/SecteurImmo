@@ -300,6 +300,7 @@ var Secteurs = (function () {
 
   return {
     init: init, surMaj: surMaj, surStructure: surStructure, liste: function () { return liste; }, options: function () { return options; },
+    membresDe: function (id) { return membres[id] || []; },
     exporter: exporter, nettoyer: nettoyer, charger: charger, stats: stats, nonFaits: nonFaits,
     creer: creer, renommer: renommer, supprimer: supprimer, definirOption: definirOption,
     voir: voir, basculerTrous: basculerTrous, trousActifs: trousActifs, suivant: suivant,

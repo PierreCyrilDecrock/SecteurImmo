@@ -82,10 +82,12 @@ var Echange = (function () {
     return /[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
 
-  function construireCsv() {
+  // ids : sélection facultative (sinon tous les bâtiments ayant un statut)
+  function construireCsv(ids) {
     var recs = Statuts._records(), adr = Statuts.adressesToutes();
     var lignes = [['id', 'adresse', 'statut', 'date', 'note', 'logements', 'latitude', 'longitude']];
-    Object.keys(recs).sort().forEach(function (id) {
+    (ids || Object.keys(recs)).slice().sort().forEach(function (id) {
+      if (!recs[id]) return;
       var r = recs[id], c = CarteImmo.centre(id), f = DataImmo.batiment(id);
       var a = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
       lignes.push([id, a, Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '), r.note || '', r.logements || '',
@@ -94,8 +96,8 @@ var Echange = (function () {
     return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 5 && i <= 7); }).join(';'); }).join('\r\n') + '\r\n';
   }
 
-  function exporterCsv() {
-    telecharger('secteurimmo-' + dateFichier() + '.csv', construireCsv(), 'text/csv;charset=utf-8');
+  function exporterCsv(ids) {
+    telecharger('secteurimmo-' + dateFichier() + '.csv', construireCsv(ids), 'text/csv;charset=utf-8');
   }
 
   function marquerExport() {
@@ -257,7 +259,7 @@ var Echange = (function () {
       if (ouvrir) { el.menu.hidden = false; el.btn.setAttribute('aria-pressed', 'true'); majEtat(); }
     });
     document.getElementById('btn-export-json').addEventListener('click', exporterJson);
-    document.getElementById('btn-export-csv').addEventListener('click', exporterCsv);
+    document.getElementById('btn-export-csv').addEventListener('click', function () { exporterCsv(); });
     document.getElementById('btn-import').addEventListener('click', function () { fichier.click(); });
     fichier.addEventListener('change', function () { if (fichier.files[0]) lireFichier(fichier.files[0]); fichier.value = ''; });
     document.getElementById('btn-effacer').addEventListener('click', function () {
@@ -277,5 +279,5 @@ var Echange = (function () {
     if (handleLie) ecrireFichier(false); // vérifie l'autorisation sans demander (pas de geste utilisateur)
   }
 
-  return { init: init, construireExport: construireExport, construireCsv: construireCsv };
+  return { init: init, construireExport: construireExport, construireCsv: construireCsv, exporterCsv: exporterCsv };
 })();

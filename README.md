@@ -13,7 +13,7 @@ Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre 
 
 Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
 
-## Fonctions actuelles (phases 1 à 5)
+## Fonctions actuelles (phases 1 à 6)
 
 - Carte plein écran (France), fonds : plan OpenStreetMap, plan IGN, vue aérienne IGN (menu en haut à droite).
 - Recherche de ville ou d'adresse avec suggestions (géocodage Géoplateforme IGN, secours Nominatim).
@@ -32,6 +32,17 @@ Barre d'outils sous la recherche :
 Statuts : Non fait (gris), Prospectus déposé (bleu, contour tireté), Contact personnel (vert), Absent / à repasser (orange), Refus / Stop pub (rouge), À rappeler (violet). Chaque statut a aussi un style de contour et une icône (visible à fort zoom) pour rester lisible sans distinguer les couleurs.
 
 La suppression d'un point manuel n'est pas annulable.
+
+### Statistiques (phase 6)
+
+Bouton **📊** (colonne de boutons en haut à droite) : écran plein cadre avec deux filtres qui s'appliquent à **toutes** les rubriques : **période** (tout, 7, 30, 90 jours) et **secteur**. `Échap` ferme l'écran.
+- **Résumé** : maisons faites, taux de contact (contacts personnels ÷ maisons faites), prospectus déposés, contacts, à rappeler, absents, refus, logements touchés, et répartition par statut.
+- **Évolution** : colonnes empilées par statut, par jour ou par semaine (regroupement automatique en semaines au-delà de 100 jours), infobulle au survol ou au clavier, et tableau des valeurs. La date retenue pour une maison est celle de son **dernier changement de statut**.
+- **Rues** : avancement par rue (faites / total, reste), rues non terminées en premier, recherche et filtre « non terminées ». La rue vient de l'adresse OpenStreetMap du bâtiment, ou de celle trouvée à l'ouverture de sa fiche ; les maisons de rue inconnue sont regroupées à part, et le total d'une rue ne compte que les maisons dont la rue est connue.
+- **Liste** : toutes les maisons faites, filtrables par statut et par texte (notes, adresses), triables (date, adresse, statut, secteur), avec **export CSV de la sélection** ; un clic sur l'adresse centre la carte et ouvre la fiche.
+- **À rappeler** : les maisons « À rappeler » de la plus ancienne à la plus récente, avec l'ancienneté en jours.
+- **Données de démonstration** (case en haut de l'écran) : jeu fictif d'environ 170 maisons sur 8 rues et 60 jours, pour voir les graphiques. Il n'est jamais enregistré et ne modifie pas vos vraies données (l'export CSV et la navigation vers la carte y sont désactivés).
+- **Couleurs** : les couleurs des statuts viennent d'une palette catégorielle validée (écarts suffisants pour les daltoniens entre statuts voisins du graphique, clair et sombre) ; le thème sombre du système est respecté dans l'écran de statistiques. L'orange et le vert-turquoise clairs restent peu contrastés sur fond blanc : les valeurs sont donc aussi données en chiffres (légende, infobulle, tableau).
 
 ### Secteurs et suivi de couverture (phase 5)
 
