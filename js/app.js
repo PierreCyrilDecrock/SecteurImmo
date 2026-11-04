@@ -21,6 +21,27 @@
   Panneau.init();
   Outils.init(carte);
 
+  // ---- Restauration depuis la base locale, puis sauvegarde automatique ----
+  var timerPrefs;
+  Store.init().then(function (d) {
+    if (d) {
+      DataImmo.restaurer(d.batiments, d.zones);
+      Statuts.charger(d, 'remplacer', true);      // silencieux : déjà en base
+      CarteImmo.afficherBatiments(d.batiments);
+      CarteImmo.synchroniserManuels(Statuts.manuels());
+      Object.keys(Statuts._records()).forEach(CarteImmo.rafraichir);
+      Outils.majLegende();
+      CarteImmo.appliquerPrefs(d.prefs);
+      Store.chargerMeta(d.meta);
+      Store.demarrer();
+      // Préférences de vue : enregistrées avec un délai pour ne pas écrire à chaque déplacement
+      CarteImmo.definirSurPrefs(function (p) { clearTimeout(timerPrefs); timerPrefs = setTimeout(function () { Store.enregistrerPrefs(p); }, 800); });
+    } else {
+      alerter('Sauvegarde automatique indisponible dans ce navigateur : pensez à exporter vos données (bouton 💾).');
+    }
+    Echange.init({ alerter: alerter, fichierLie: d && d.fichierLie });
+  });
+
   // ---- Chargement des bâtiments ----
   var btn = document.getElementById('btn-batiments');
   var info = document.getElementById('batiments-info');
@@ -52,6 +73,7 @@
     }).then(function (res) {
       CarteImmo.afficherBatiments(res.nouveaux);
       Outils.majLegende();
+      if (!res.dejaCharge) { Store.enregistrerBatiments(res.nouveaux); Store.enregistrerZones(DataImmo.zones()); }
       info.textContent = res.dejaCharge ? 'Zone déjà chargée.' :
         res.nouveaux.length + ' nouveau(x) bâtiment(s) – ' + res.total + ' au total.';
     }).catch(function (err) {

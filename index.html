@@ -37,6 +37,30 @@
     <strong>Légende</strong> <small>(décochez pour masquer)</small>
   </div>
 
+  <!-- Sauvegarde, export, import -->
+  <button type="button" id="btn-donnees" aria-pressed="false" title="Mes données : sauvegarde, export, import">💾</button>
+  <div id="donnees" hidden>
+    <strong>Mes données</strong>
+    <p id="donnees-etat"></p>
+    <div class="actions-donnees">
+      <button type="button" id="btn-export-json">Exporter (JSON)</button>
+      <button type="button" id="btn-export-csv">Exporter (CSV)</button>
+      <button type="button" id="btn-import">Importer…</button>
+      <button type="button" id="btn-lier" hidden>Lier un fichier de sauvegarde…</button>
+    </div>
+    <input type="file" id="fichier-import" accept=".json,application/json" hidden>
+    <p id="lie-etat" hidden></p>
+    <p class="rgpd">🔒 Vos données restent uniquement sur cet ordinateur, dans ce navigateur : elles ne sont envoyées à aucun serveur.
+      Elles peuvent contenir des données personnelles (notes sur des habitants) : protégez vos exports.</p>
+    <button type="button" id="btn-effacer" class="btn-lien">Effacer toutes mes données</button>
+  </div>
+  <dialog id="dlg-import" aria-label="Importer une sauvegarde"></dialog>
+  <div id="rappel" role="alert" hidden>
+    <span>💾 Pas de sauvegarde (export) depuis plus de 7 jours.</span>
+    <button type="button" id="rappel-export">Exporter maintenant</button>
+    <button type="button" id="rappel-plus-tard" class="btn-lien">Plus tard</button>
+  </div>
+
   <!-- Fiche du bâtiment sélectionné -->
   <aside id="panneau" hidden aria-label="Fiche du bâtiment">
     <button id="panneau-fermer" type="button" aria-label="Fermer la fiche">✕</button>
@@ -61,6 +85,8 @@
   <script src="js/map.js"></script>
   <script src="js/panneau.js"></script>
   <script src="js/outils.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/echange.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

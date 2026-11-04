@@ -24,7 +24,8 @@ var DataImmo = (function () {
   };
 
   var batiments = {};   // cache mémoire : id ("way/123") -> Feature GeoJSON
-  var zones = [];       // zones déjà chargées : [sud, ouest, nord, est]
+  var zones = [];       // zones déjà chargées : { b: [sud, ouest, nord, est], t: date en ms }
+  var VALIDITE_ZONE_MS = 30 * 24 * 3600 * 1000; // au-delà, on retélécharge (OSM évolue)
   var enCours = false;
 
   // ---------- Zones ----------
@@ -48,7 +49,8 @@ var DataImmo = (function () {
   }
 
   function dejaCharge(b) {
-    return zones.some(function (z) { return contenue(b, z); });
+    var limite = Date.now() - VALIDITE_ZONE_MS;
+    return zones.some(function (z) { return z.t >= limite && contenue(b, z.b); });
   }
 
   // ---------- Conversion Overpass -> GeoJSON ----------
@@ -155,7 +157,7 @@ var DataImmo = (function () {
         var f = enFeature(el);
         if (f && !batiments[f.id]) { batiments[f.id] = f; nouveaux.push(f); }
       });
-      zones.push(b);
+      zones.push({ b: b, t: Date.now() });
       return { nouveaux: nouveaux, total: Object.keys(batiments).length, dejaCharge: false };
     }).finally(function () { enCours = false; });
   }
@@ -184,6 +186,13 @@ var DataImmo = (function () {
     adresse: adresse,
     typeBatiment: typeBatiment,
     // Pour les tests / phases suivantes
+    // Restaure le cache depuis la base locale / un import
+    restaurer: function (features, zonesSauvees) {
+      (features || []).forEach(function (f) { batiments[f.id] = f; });
+      if (zonesSauvees) zones = zonesSauvees;
+    },
+    ajouter: function (features) { features.forEach(function (f) { if (!batiments[f.id]) batiments[f.id] = f; }); },
+    zones: function () { return zones; },
     batiment: function (id) { return batiments[id] || null; },
     _batiments: function () { return batiments; }
   };

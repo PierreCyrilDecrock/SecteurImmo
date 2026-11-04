@@ -28,6 +28,7 @@ var Statuts = (function () {
   var pile = [];      // opérations annulables : { avant: { id: copie|null } }
   var PILE_MAX = 200;
   var ecouteurs = [];
+  var ecouteursDonnees = []; // pour la sauvegarde : (type, ids), type = 'records' | 'manuels' | 'adresses'
 
   function copie(r) { return r ? JSON.parse(JSON.stringify(r)) : null; }
 
@@ -38,8 +39,13 @@ var Statuts = (function () {
     return d.toISOString().slice(0, 16);
   }
 
-  function notifier(ids) { ecouteurs.forEach(function (cb) { cb(ids); }); }
+  function signaler(type, ids) { ecouteursDonnees.forEach(function (cb) { cb(type, ids); }); }
+  function notifier(ids, silencieux) {
+    ecouteurs.forEach(function (cb) { cb(ids); });
+    if (!silencieux) signaler('records', ids);
+  }
   function surChangement(cb) { ecouteurs.push(cb); }
+  function surDonnees(cb) { ecouteursDonnees.push(cb); }
 
   function statutDe(id) { return records[id] ? (records[id].statut || 'aucun') : 'aucun'; }
   function get(id) { return records[id] || null; }
@@ -95,15 +101,17 @@ var Statuts = (function () {
   function ajouterManuel(lat, lon) {
     var id = 'man/' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     manuels[id] = { lat: lat, lon: lon };
+    signaler('manuels', [id]);
     return id;
   }
   function supprimerManuel(id) {
     delete manuels[id]; delete records[id]; delete adresses[id];
     pile = pile.filter(function (op) { delete op.avant[id]; return Object.keys(op.avant).length; });
+    signaler('manuels', [id]);
     notifier([id]);
   }
 
-  function setAdresse(id, label) { adresses[id] = label; }
+  function setAdresse(id, label) { adresses[id] = label; signaler('adresses', [id]); }
   function adresseDe(id) { return adresses[id] || ''; }
 
   // Comptage par statut ; "aucun" = total - tout ce qui est coché
@@ -114,7 +122,41 @@ var Statuts = (function () {
     return c;
   }
 
+  /*
+   * Charge des données (restauration au démarrage, import) :
+   *  mode 'remplacer' : efface tout puis charge ;
+   *  mode 'fusionner' : ajoute ; en cas de conflit sur un bâtiment, garde l'entrée la plus récente.
+   * silencieux : n'enregistre pas (la source est déjà la base locale).
+   * Renvoie des compteurs. L'historique d'annulation est vidé.
+   */
+  function charger(donnees, mode, silencieux) {
+    var bilan = { ajoutes: 0, remplaces: 0, conflitsGardes: 0, manuels: 0 };
+    var touches = Object.keys(records);
+    var recs = donnees.records || {};
+    if (mode === 'remplacer') { records = {}; manuels = {}; adresses = {}; }
+    Object.keys(recs).forEach(function (id) {
+      var nouveau = copie(recs[id]);
+      var ancien = records[id];
+      if (!ancien) { records[id] = nouveau; bilan.ajoutes++; }
+      else if ((nouveau.date || '') >= (ancien.date || '')) { records[id] = nouveau; bilan.remplaces++; }
+      else bilan.conflitsGardes++;
+      nettoyer(id);
+      touches.push(id);
+    });
+    var idsManuels = Object.keys(donnees.manuels || {}), idsAdresses = [];
+    idsManuels.forEach(function (id) {
+      if (!manuels[id]) bilan.manuels++;
+      manuels[id] = { lat: donnees.manuels[id].lat, lon: donnees.manuels[id].lon };
+    });
+    Object.keys(donnees.adresses || {}).forEach(function (id) { if (!adresses[id]) { adresses[id] = donnees.adresses[id]; idsAdresses.push(id); } });
+    pile = [];
+    if (!silencieux) { signaler('manuels', idsManuels); signaler('adresses', idsAdresses); }
+    notifier(touches, silencieux);
+    return bilan;
+  }
+
   return {
+    charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
     LISTE: LISTE, parId: function (id) { return parId[id] || parId.aucun; },
     get: get, statutDe: statutDe, modifier: modifier, annuler: annuler, peutAnnuler: peutAnnuler,
     surChangement: surChangement, maintenant: maintenant,

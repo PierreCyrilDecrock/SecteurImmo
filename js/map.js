@@ -12,6 +12,7 @@ var CarteImmo = (function () {
   var masques = {};         // statutId -> true si masqué par la légende
   var selection = {};       // id -> true
   var surClic = null;       // fonction(id) appelée au clic sur un bâtiment
+  var fonds = {}, fondActif = 'Plan OpenStreetMap', surPrefs = null;
 
   // ---------- Fonds de carte ----------
 
@@ -50,8 +51,15 @@ var CarteImmo = (function () {
     surveillerErreurs(ignOrtho, 'Vue aérienne IGN', alerter);
 
     osm.addTo(map);
-    L.control.layers({ 'Plan OpenStreetMap': osm, 'Plan IGN': ignPlan, 'Vue aérienne IGN': ignOrtho },
-      null, { position: 'topright', collapsed: true }).addTo(map);
+    fonds = { 'Plan OpenStreetMap': osm, 'Plan IGN': ignPlan, 'Vue aérienne IGN': ignOrtho };
+    var ctrlFonds = L.control.layers(fonds, null, { position: 'topright', collapsed: true }).addTo(map);
+    // Une fois déplié, le menu des fonds passerait sous la barre d'outils (qui est hors de la carte) :
+    // on masque alors temporairement les outils (classe sur <body>).
+    new MutationObserver(function () {
+      document.body.classList.toggle('fonds-ouverts', ctrlFonds.getContainer().classList.contains('leaflet-control-layers-expanded'));
+    }).observe(ctrlFonds.getContainer(), { attributes: true, attributeFilter: ['class'] });
+    map.on('baselayerchange', function (e) { fondActif = e.name; prefsChangees(); });
+    map.on('moveend', prefsChangees);
     L.control.scale({ imperial: false }).addTo(map);
 
     groupe = L.layerGroup().addTo(map);
@@ -61,6 +69,21 @@ var CarteImmo = (function () {
     // Tout changement de statut met à jour l'affichage des bâtiments concernés
     Statuts.surChangement(function (ids) { ids.forEach(appliquer); });
     return map;
+  }
+
+  // ---------- Préférences de vue (restaurées au rechargement) ----------
+  function prefsChangees() {
+    if (!surPrefs) return;
+    var c = map.getCenter();
+    surPrefs({ lat: c.lat, lon: c.lng, zoom: map.getZoom(), fond: fondActif });
+  }
+  function definirSurPrefs(fn) { surPrefs = fn; }
+  function appliquerPrefs(p) {
+    if (!p) return;
+    if (p.fond && fonds[p.fond] && p.fond !== fondActif) {
+      map.removeLayer(fonds[fondActif]); fonds[p.fond].addTo(map); fondActif = p.fond;
+    }
+    if (typeof p.lat === 'number' && typeof p.lon === 'number' && p.zoom) map.setView([p.lat, p.lon], p.zoom, { animate: false });
   }
 
   // ---------- Style d'un bâtiment ----------
@@ -156,6 +179,12 @@ var CarteImmo = (function () {
     Object.keys(elements).forEach(function (id) { if (Statuts.statutDe(id) === statutId) appliquer(id); });
   }
 
+  // Aligne les points manuels affichés sur ceux du modèle (après restauration / import)
+  function synchroniserManuels(manuels) {
+    Object.keys(elements).forEach(function (id) { if (elements[id].manuel && !manuels[id]) retirer(id); });
+    Object.keys(manuels).forEach(function (id) { afficherManuel(id, manuels[id]); });
+  }
+
   function centre(id) { return elements[id] ? elements[id].centre : null; }
   function total() { return Object.keys(elements).length; }
 
@@ -198,6 +227,7 @@ var CarteImmo = (function () {
     init: init, aller: aller, getMap: function () { return map; },
     afficherBatiments: afficherBatiments, afficherManuel: afficherManuel, retirer: retirer,
     definirSurClic: definirSurClic, filtrer: filtrer, centre: centre, total: total,
+    definirSurPrefs: definirSurPrefs, appliquerPrefs: appliquerPrefs, synchroniserManuels: synchroniserManuels,
     idsDans: idsDans, surligner: surligner, rafraichir: appliquer
   };
 })();

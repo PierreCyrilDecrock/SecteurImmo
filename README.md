@@ -13,7 +13,7 @@ Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre 
 
 Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
 
-## Fonctions actuelles (phases 1 à 3)
+## Fonctions actuelles (phases 1 à 4)
 
 - Carte plein écran (France), fonds : plan OpenStreetMap, plan IGN, vue aérienne IGN (menu en haut à droite).
 - Recherche de ville ou d'adresse avec suggestions (géocodage Géoplateforme IGN, secours Nominatim).
@@ -31,12 +31,26 @@ Barre d'outils sous la recherche :
 
 Statuts : Non fait (gris), Prospectus déposé (bleu, contour tireté), Contact personnel (vert), Absent / à repasser (orange), Refus / Stop pub (rouge), À rappeler (violet). Chaque statut a aussi un style de contour et une icône (visible à fort zoom) pour rester lisible sans distinguer les couleurs.
 
-**Attention** : les statuts ne sont pas encore sauvegardés — ils disparaissent au rechargement de la page. La sauvegarde (IndexedDB) et l'export/import arrivent en phase 4. La suppression d'un point manuel n'est pas annulable.
+La suppression d'un point manuel n'est pas annulable.
+
+### Sauvegarde, export, import (phase 4)
+
+- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, notes, points ajoutés, adresses trouvées, contours des bâtiments téléchargés, zones déjà chargées (valables 30 jours, pour éviter de retélécharger), position de la carte et fond choisi. Tout est restauré au rechargement de la page. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`) : changer de navigateur ou de port repart de zéro (utilisez l'export/import pour déplacer vos données).
+- **Bouton 💾 (en haut à droite)** :
+  - *Exporter (JSON)* : sauvegarde complète (`secteurimmo-AAAA-MM-JJ.json`) ; seuls les contours des bâtiments cochés sont inclus.
+  - *Exporter (CSV)* : `id ; adresse ; statut ; date ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel français). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
+  - *Importer* : aperçu du contenu puis **Fusionner** (en cas de conflit sur un bâtiment, l'entrée la plus récente est gardée) ou **Remplacer** (avec, par défaut, téléchargement préalable d'une sauvegarde de vos données actuelles). Le fichier est validé et nettoyé avant d'être pris en compte.
+  - *Lier un fichier de sauvegarde* (Chrome / Edge uniquement) : l'application réécrit ce fichier automatiquement quelques secondes après chaque modification. Après un redémarrage du navigateur, il faut cliquer sur « Reconnecter le fichier lié » (autorisation à redonner).
+  - *Effacer toutes mes données*.
+- **Rappel** : un bandeau apparaît si aucun export n'a été fait depuis plus de 7 jours (« Plus tard » le repousse de 24 h).
+- Si le navigateur n'autorise pas IndexedDB (navigation privée…), l'application fonctionne mais sans sauvegarde automatique : un message l'indique, exportez régulièrement.
+- Le format de sauvegarde porte un numéro de schéma (actuellement 1) pour pouvoir évoluer.
+- **Non vérifié en conditions réelles** : le fichier lié avec la vraie API *File System Access* (testé avec une simulation) ; testez-le sous Chrome ou Edge.
 
 ### Règles et limites du chargement (Overpass)
 
 - Requêtes bornées : zoom ≥ 16 et zone ≤ 6 km² ; une seule requête à la fois.
-- Cache en mémoire : une zone (ou un bâtiment) déjà chargé n'est jamais retéléchargé. Le cache disparaît au rechargement de la page (la sauvegarde locale arrive en phase 4).
+- Cache en mémoire : une zone (ou un bâtiment) déjà chargé n'est jamais retéléchargé. Le cache est conservé dans la sauvegarde locale (voir ci-dessus).
 - Erreurs 429 / 502 / 503 / 504 ou réseau : jusqu'à 4 essais espacés (2 s, 4 s, 8 s), en alternant entre `overpass-api.de` et le miroir `overpass.kumi.systems`.
 - Les relations multipolygones sont gérées dans les cas simples (contours extérieurs déjà fermés) ; les contours non fermés sont ignorés.
 - Beaucoup de bâtiments OSM n'ont pas d'adresse (affichée « adresse inconnue ») ; le géocodage inverse (IGN, secours Nominatim) la complète à l'ouverture de la fiche ; le champ `distance` de sa réponse n'a pas pu être vérifié (adresse approximative marquée « ≈ » si présent).
@@ -48,4 +62,4 @@ Statuts : Non fait (gris), Prospectus déposé (bleu, contour tireté), Contact 
 
 ## Données et vie privée
 
-Aucune donnée n'est envoyée à un serveur du projet. Ne committez jamais d'exports de prospection (le `.gitignore` en exclut les noms usuels).
+Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Les notes peuvent contenir des données personnelles, protégez vos exports. Ne committez jamais d'exports de prospection (le `.gitignore` en exclut les noms usuels).
