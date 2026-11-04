@@ -17,7 +17,49 @@
     timerToast = setTimeout(function () { toast.hidden = true; }, 6000);
   }
 
-  CarteImmo.init(alerter);
+  var carte = CarteImmo.init(alerter);
+
+  // ---- Chargement des bâtiments ----
+  var btn = document.getElementById('btn-batiments');
+  var info = document.getElementById('batiments-info');
+  var chargement = false, aIndice = false;
+
+  // Active le bouton seulement si le zoom est suffisant
+  function majBouton() {
+    if (chargement) return;
+    var ok = carte.getZoom() >= DataImmo.config.zoomMin;
+    btn.disabled = !ok;
+    if (!ok) {
+      info.textContent = 'Zoomez davantage (niveau ' + DataImmo.config.zoomMin + ' minimum) pour charger les maisons.';
+      aIndice = true;
+    } else if (aIndice) { // n'efface que l'indice de zoom, pas le résultat d'un chargement
+      info.textContent = '';
+      aIndice = false;
+    }
+  }
+  carte.on('zoomend', majBouton);
+  majBouton();
+
+  btn.addEventListener('click', function () {
+    chargement = true;
+    btn.disabled = true;
+    btn.textContent = 'Chargement…';
+    info.textContent = ''; aIndice = false;
+    DataImmo.charger(carte.getBounds(), carte.getZoom(), function (n, max, delai) {
+      info.textContent = 'Serveur occupé, nouvel essai ' + n + '/' + max + ' dans ' + Math.round(delai / 1000) + ' s…';
+    }).then(function (res) {
+      CarteImmo.afficherBatiments(res.nouveaux);
+      info.textContent = res.dejaCharge ? 'Zone déjà chargée.' :
+        res.nouveaux.length + ' nouveau(x) bâtiment(s) – ' + res.total + ' au total.';
+    }).catch(function (err) {
+      alerter(err.message || 'Chargement impossible.');
+      info.textContent = '';
+    }).finally(function () {
+      chargement = false;
+      btn.textContent = 'Charger les bâtiments de cette zone';
+      majBouton();
+    });
+  });
 
   // ---- Suggestions ----
   function fermer() { liste.hidden = true; liste.innerHTML = ''; resultats = []; actif = -1; }

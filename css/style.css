@@ -41,9 +41,27 @@ html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Se
 #suggestions li small { display: block; opacity: .7; }
 #suggestions li.vide { cursor: default; opacity: .8; }
 
+/* Bouton de chargement des bâtiments, en bas au centre */
+#batiments {
+  position: fixed; z-index: 1000; left: 50%; transform: translateX(-50%);
+  bottom: calc(40px + env(safe-area-inset-bottom)); width: min(420px, calc(100vw - 32px));
+  display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
+}
+#btn-batiments {
+  pointer-events: auto; width: 100%; min-height: 48px; border: 0; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: var(--ombre);
+}
+@media (prefers-color-scheme: dark) { #btn-batiments { color: #0b1620; } }
+#btn-batiments:disabled { background: var(--fond); color: var(--texte); opacity: .85; cursor: not-allowed; border: 1px solid var(--bordure); }
+#batiments-info {
+  margin: 0; padding: 4px 10px; border-radius: 6px; background: var(--fond); box-shadow: var(--ombre);
+  font-size: 14px; text-align: center;
+}
+#batiments-info:empty { display: none; }
+
 #toast {
   position: fixed; z-index: 1100; left: 50%; transform: translateX(-50%);
-  bottom: calc(24px + env(safe-area-inset-bottom)); max-width: min(520px, calc(100vw - 32px));
+  bottom: calc(150px + env(safe-area-inset-bottom)); max-width: min(520px, calc(100vw - 32px));
   background: #323f4b; color: #fff; padding: 12px 16px; border-radius: 8px; box-shadow: var(--ombre); font-size: 15px;
 }
 

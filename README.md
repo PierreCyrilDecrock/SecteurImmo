@@ -13,10 +13,20 @@ Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre 
 
 Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
 
-## Fonctions actuelles (phase 1)
+## Fonctions actuelles (phases 1 et 2)
 
 - Carte plein écran (France), fonds : plan OpenStreetMap, plan IGN, vue aérienne IGN (menu en haut à droite).
 - Recherche de ville ou d'adresse avec suggestions (géocodage Géoplateforme IGN, secours Nominatim).
+- Bouton **« Charger les bâtiments de cette zone »** (actif à partir du zoom 16) : télécharge les bâtiments OpenStreetMap de la zone visible via l'API Overpass et les affiche en gris (« non fait »). Survol : type de bâtiment et adresse si OSM la connaît.
+
+### Règles et limites du chargement (Overpass)
+
+- Requêtes bornées : zoom ≥ 16 et zone ≤ 6 km² ; une seule requête à la fois.
+- Cache en mémoire : une zone (ou un bâtiment) déjà chargé n'est jamais retéléchargé. Le cache disparaît au rechargement de la page (la sauvegarde locale arrive en phase 4).
+- Erreurs 429 / 502 / 503 / 504 ou réseau : jusqu'à 4 essais espacés (2 s, 4 s, 8 s), en alternant entre `overpass-api.de` et le miroir `overpass.kumi.systems`.
+- Les relations multipolygones sont gérées dans les cas simples (contours extérieurs déjà fermés) ; les contours non fermés sont ignorés.
+- Beaucoup de bâtiments OSM n'ont pas d'adresse (affichée « adresse inconnue ») ; la phase 3 ajoutera le géocodage inverse à la demande.
+- **Non vérifié en conditions réelles** : le développement s'est fait dans un environnement dont le réseau bloquait Overpass ; le comportement (CORS, limites exactes) a été testé avec des réponses simulées. À confirmer chez vous (voir la console du navigateur en cas d'erreur).
 
 ## Bibliothèques
 

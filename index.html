@@ -23,12 +23,19 @@
     <ul id="suggestions" role="listbox" hidden></ul>
   </div>
 
+  <!-- Chargement des bâtiments de la zone visible -->
+  <div id="batiments">
+    <button id="btn-batiments" type="button" disabled>Charger les bâtiments de cette zone</button>
+    <p id="batiments-info" role="status" aria-live="polite"></p>
+  </div>
+
   <!-- Messages courts (erreurs réseau, infos) -->
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Scripts classiques (pas de modules ES) : l'ordre compte -->
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="js/geocode.js"></script>
+  <script src="js/data.js"></script>
   <script src="js/map.js"></script>
   <script src="js/app.js"></script>
 </body>

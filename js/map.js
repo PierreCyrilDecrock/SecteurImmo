@@ -5,7 +5,9 @@
 var CarteImmo = (function () {
   'use strict';
 
-  var map, marqueurRecherche;
+  var map, marqueurRecherche, couchesBatiments = {}, groupeBatiments;
+
+  var STYLE_NON_FAIT = { color: '#5f6b76', weight: 1, fillColor: '#9aa5b1', fillOpacity: 0.55 };
 
   // Tuiles de la Géoplateforme IGN (WMTS, projection Web Mercator "PM")
   function urlIgn(couche, format) {
@@ -25,7 +27,7 @@ var CarteImmo = (function () {
   }
 
   function init(alerter) {
-    map = L.map('map', { zoomControl: true, maxZoom: 19 }).setView([46.6, 2.5], 6); // France
+    map = L.map('map', { zoomControl: true, maxZoom: 19, preferCanvas: true }).setView([46.6, 2.5], 6); // France
 
     var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -49,8 +51,23 @@ var CarteImmo = (function () {
     osm.addTo(map);
     L.control.layers(fonds, null, { position: 'topright', collapsed: true }).addTo(map);
     L.control.scale({ imperial: false }).addTo(map);
+    groupeBatiments = L.layerGroup().addTo(map);
     return map;
   }
+
+  // Ajoute des bâtiments (Features GeoJSON) sur la carte, sans doublon
+  function afficherBatiments(features) {
+    features.forEach(function (f) {
+      if (couchesBatiments[f.id]) return;
+      var couche = L.geoJSON(f, { style: function () { return STYLE_NON_FAIT; } });
+      var adr = DataImmo.adresse(f.properties);
+      couche.bindTooltip(DataImmo.typeBatiment(f.properties) + (adr ? ' – ' + adr : ' – adresse inconnue'), { sticky: true });
+      couche.addTo(groupeBatiments);
+      couchesBatiments[f.id] = couche;
+    });
+  }
+
+  function getMap() { return map; }
 
   // Recentre la carte sur un résultat de recherche et pose un repère
   function aller(resultat) {
@@ -59,5 +76,5 @@ var CarteImmo = (function () {
     marqueurRecherche = L.marker([resultat.lat, resultat.lon], { title: resultat.label }).addTo(map);
   }
 
-  return { init: init, aller: aller };
+  return { init: init, aller: aller, afficherBatiments: afficherBatiments, getMap: getMap };
 })();
