@@ -24,13 +24,14 @@ var Echange = (function () {
     Object.keys(man).forEach(function (id) { if (adr[id]) adresses[id] = adr[id]; });
     return {
       app: 'SecteurImmo', schema: Store.SCHEMA, exporteLe: new Date().toISOString(),
-      records: recs, manuels: man, adresses: adresses, batiments: batiments
+      records: recs, manuels: man, adresses: adresses, batiments: batiments,
+      secteurs: Secteurs.exporter()
     };
   }
 
   // Ne garde que des données bien formées (un fichier importé n'est jamais pris tel quel)
   function nettoyerImport(d) {
-    var propre = { records: {}, manuels: {}, adresses: {}, batiments: [], ignores: 0 };
+    var propre = { records: {}, manuels: {}, adresses: {}, batiments: [], secteurs: { secteurs: [], options: {} }, ignores: 0 };
     var valides = {}; Statuts.LISTE.forEach(function (s) { valides[s.id] = true; });
     Object.keys(d.records || {}).forEach(function (id) {
       var r = d.records[id];
@@ -52,6 +53,8 @@ var Echange = (function () {
         propre.batiments.push({ type: 'Feature', id: f.id, properties: f.properties && typeof f.properties === 'object' ? f.properties : {}, geometry: f.geometry });
       } else propre.ignores++;
     });
+    var sec = Secteurs.nettoyer(d.secteurs);
+    propre.secteurs = sec.donnees; propre.ignores += sec.ignores;
     return propre;
   }
 
@@ -126,7 +129,7 @@ var Echange = (function () {
     var h = document.createElement('h2'); h.textContent = 'Importer une sauvegarde'; dlg.appendChild(h);
     var p = document.createElement('p');
     p.textContent = 'Fichier du ' + (brut.exporteLe ? new Date(brut.exporteLe).toLocaleString('fr-FR') : 'date inconnue') + ' : ' +
-      nbRecs + ' bâtiment(s) avec statut, ' + nbMan + ' point(s) ajouté(s), ' + propre.batiments.length + ' contour(s).' +
+      nbRecs + ' bâtiment(s) avec statut, ' + nbMan + ' point(s) ajouté(s), ' + propre.batiments.length + ' contour(s), ' + propre.secteurs.secteurs.length + ' secteur(s).' +
       (conflits ? ' ' + conflits + ' bâtiment(s) existent déjà ici.' : '') +
       (propre.ignores ? ' ' + propre.ignores + ' élément(s) invalide(s) ignoré(s).' : '');
     dlg.appendChild(p);
@@ -161,6 +164,7 @@ var Echange = (function () {
     DataImmo.ajouter(propre.batiments);
     Store.enregistrerBatiments(propre.batiments);
     var bilan = Statuts.charger(propre, mode, mode === 'remplacer');
+    Secteurs.charger(propre.secteurs, mode);
     CarteImmo.afficherBatiments(propre.batiments);
     CarteImmo.synchroniserManuels(Statuts.manuels());
     Object.keys(Statuts._records()).forEach(CarteImmo.rafraichir);
@@ -248,9 +252,9 @@ var Echange = (function () {
     if (handleLie) etatLie = 'à vérifier';
 
     el.btn.addEventListener('click', function () {
-      el.menu.hidden = !el.menu.hidden;
-      el.btn.setAttribute('aria-pressed', el.menu.hidden ? 'false' : 'true');
-      majEtat();
+      var ouvrir = el.menu.hidden;
+      Ui.fermerVolets(); Panneau.fermer();
+      if (ouvrir) { el.menu.hidden = false; el.btn.setAttribute('aria-pressed', 'true'); majEtat(); }
     });
     document.getElementById('btn-export-json').addEventListener('click', exporterJson);
     document.getElementById('btn-export-csv').addEventListener('click', exporterCsv);

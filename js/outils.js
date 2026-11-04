@@ -20,11 +20,13 @@ var Outils = (function () {
   function setMode(m) {
     quitterSelection();
     if (mode === 'selection') desactiverTrace();
+    if (mode === 'secteur' && m !== 'secteur') Secteurs.abandonnerDessin();
     mode = m;
     Panneau.fermer();
     var conteneur = map.getContainer();
     conteneur.classList.toggle('mode-tournee', m === 'tournee');
     conteneur.classList.toggle('mode-ajouter', m === 'ajouter');
+    conteneur.classList.toggle('mode-secteur', m === 'secteur');
     conteneur.classList.toggle('mode-selection', m === 'selection');
     if (m === 'selection') activerTrace();
     barre.querySelectorAll('[data-mode]').forEach(function (b) {
@@ -51,6 +53,18 @@ var Outils = (function () {
     if (mode === 'tournee') {
       texte('Tournée rapide : chaque clic sur une maison lui applique ce statut.');
       boutons(statutTournee, function (id) { statutTournee = id; dessinerContexte(); });
+    } else if (mode === 'secteur') {
+      var n = Secteurs.nbPointsDessin();
+      texte('Nouveau secteur : cliquez sur la carte pour poser les sommets (' + n + ' point' + (n > 1 ? 's' : '') + '), puis « Terminer ».');
+      var g2 = document.createElement('div'); g2.className = 'grille-statuts';
+      function act(id, t, fn, off) { var b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = 'btn-statut'; b.textContent = t; b.disabled = !!off; b.addEventListener('click', fn); g2.appendChild(b); }
+      act('sect-terminer', '✔ Terminer', function () {
+        var s = Secteurs.terminerDessin();
+        if (s) SecteursUi.ouvrirPourRenommer(s.id);
+      }, n < 3);
+      act('sect-retirer', '↶ Retirer le dernier point', function () { Secteurs.retirerDernierPoint(); }, n < 1);
+      act('sect-annuler', '✕ Annuler', function () { setMode('consulter'); });
+      contexte.appendChild(g2);
     } else if (mode === 'ajouter') {
       texte('Cliquez sur la carte à l’emplacement de la maison à ajouter.');
     } else if (mode === 'selection') {
@@ -146,12 +160,14 @@ var Outils = (function () {
 
   // ---------- Clics sur la carte ----------
 
-  function surClicBatiment(id) {
+  function surClicBatiment(id, ll) {
+    if (mode === 'secteur') { if (ll) Secteurs.ajouterPoint(ll); return; }
     if (mode === 'tournee') Statuts.modifier([id], { statut: statutTournee });
     else if (mode === 'consulter') Panneau.ouvrir(id);
   }
 
   function surClicCarte(e) {
+    if (mode === 'secteur') { Secteurs.ajouterPoint(e.latlng); return; }
     if (mode !== 'ajouter') return;
     var id = Statuts.ajouterManuel(e.latlng.lat, e.latlng.lng);
     CarteImmo.afficherManuel(id, Statuts.manuels()[id]);
@@ -228,5 +244,5 @@ var Outils = (function () {
     });
   }
 
-  return { init: init, setMode: setMode, majLegende: majLegende };
+  return { init: init, setMode: setMode, majLegende: majLegende, rafraichirContexte: dessinerContexte };
 })();

@@ -37,6 +37,16 @@
     <strong>Légende</strong> <small>(décochez pour masquer)</small>
   </div>
 
+  <!-- Secteurs de prospection -->
+  <button type="button" id="btn-secteurs" aria-pressed="false" title="Secteurs : couverture et avancement">🗺</button>
+  <div id="secteurs" hidden>
+    <strong>Secteurs</strong>
+    <p class="aide">Un secteur = une zone dessinée sur la carte. L'avancement compte les bâtiments chargés qu'il contient : chargez-les d'abord.</p>
+    <button type="button" id="secteurs-nouveau" class="btn-statut">➕ Dessiner un secteur</button>
+    <label class="case"><input type="checkbox" id="secteurs-couleur"> Colorer les secteurs selon leur avancement</label>
+    <ul id="secteurs-liste"></ul>
+  </div>
+
   <!-- Sauvegarde, export, import -->
   <button type="button" id="btn-donnees" aria-pressed="false" title="Mes données : sauvegarde, export, import">💾</button>
   <div id="donnees" hidden>
@@ -84,6 +94,8 @@
   <script src="js/ui.js"></script>
   <script src="js/map.js"></script>
   <script src="js/panneau.js"></script>
+  <script src="js/secteurs.js"></script>
+  <script src="js/secteurs-ui.js"></script>
   <script src="js/outils.js"></script>
   <script src="js/store.js"></script>
   <script src="js/echange.js"></script>

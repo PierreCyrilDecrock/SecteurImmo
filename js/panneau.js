@@ -24,6 +24,7 @@ var Panneau = (function () {
   }
 
   function ouvrir(id) {
+    Ui.fermerVolets();
     idCourant = id;
     el.hidden = false;
     CarteImmo.surligner([id]);

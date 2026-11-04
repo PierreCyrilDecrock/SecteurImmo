@@ -19,7 +19,10 @@
 
   var carte = CarteImmo.init(alerter);
   Panneau.init();
+  Secteurs.init(carte, alerter);
+  SecteursUi.init(alerter);
   Outils.init(carte);
+  Secteurs.surStructure(function () { Store.enregistrerSecteurs(Secteurs.exporter()); });
 
   // ---- Restauration depuis la base locale, puis sauvegarde automatique ----
   var timerPrefs;
@@ -30,6 +33,7 @@
       CarteImmo.afficherBatiments(d.batiments);
       CarteImmo.synchroniserManuels(Statuts.manuels());
       Object.keys(Statuts._records()).forEach(CarteImmo.rafraichir);
+      Secteurs.charger(d.secteurs, 'remplacer');
       Outils.majLegende();
       CarteImmo.appliquerPrefs(d.prefs);
       Store.chargerMeta(d.meta);

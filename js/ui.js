@@ -19,5 +19,15 @@ var Ui = (function () {
     return b;
   }
 
-  return { boutonStatut: boutonStatut };
+  // Un seul volet à la fois dans la zone de droite (menu données, secteurs, fiche)
+  function fermerVolets() {
+    ['donnees', 'secteurs'].forEach(function (id) {
+      var e = document.getElementById(id); if (e) e.hidden = true;
+    });
+    ['btn-donnees', 'btn-secteurs'].forEach(function (id) {
+      var e = document.getElementById(id); if (e) e.setAttribute('aria-pressed', 'false');
+    });
+  }
+
+  return { boutonStatut: boutonStatut, fermerVolets: fermerVolets };
 })();

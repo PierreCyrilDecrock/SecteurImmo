@@ -12,7 +12,7 @@ var Store = (function () {
 
   var NOM_BASE = 'secteurimmo';
   var VERSION_BASE = 1;
-  var SCHEMA = 1;            // version du format des données (export compris)
+  var SCHEMA = 2;            // version du format des données (export compris)
   var db = null;
   var attente = null;        // écritures en attente : { magasin: { cle: valeur|null } }
   var timer = null;
@@ -48,7 +48,8 @@ var Store = (function () {
 
   // Adapte d'anciennes données au schéma courant (aucune migration nécessaire pour le moment)
   function migrer(donnees, schemaLu) {
-    // if (schemaLu < 2) { … }  ← à compléter quand le format changera
+    // Schéma 1 -> 2 : ajout des secteurs (absents = liste vide, déjà géré par les valeurs par défaut)
+    // if (schemaLu < 3) { … }  ← à compléter quand le format changera
     return donnees;
   }
 
@@ -60,8 +61,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} } };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });
@@ -152,13 +153,14 @@ var Store = (function () {
     if (!db) return Promise.resolve();
     clearTimeout(timer); vider();
     return new Promise(function (ok) {
-      var tx = db.transaction(['records', 'manuels', 'adresses', 'batiments'], 'readwrite');
+      var tx = db.transaction(['records', 'manuels', 'adresses', 'batiments', 'kv'], 'readwrite');
       ['records', 'manuels', 'adresses'].forEach(function (n) { tx.objectStore(n).clear(); });
       var recs = Statuts._records(), man = Statuts.manuels(), adr = Statuts.adressesToutes();
       Object.keys(recs).forEach(function (id) { tx.objectStore('records').put(Object.assign({ id: id }, recs[id])); });
       Object.keys(man).forEach(function (id) { tx.objectStore('manuels').put({ id: id, lat: man[id].lat, lon: man[id].lon }); });
       Object.keys(adr).forEach(function (id) { tx.objectStore('adresses').put({ id: id, label: adr[id] }); });
       (batimentsAGarder || []).forEach(function (f) { tx.objectStore('batiments').put(Object.assign({}, f)); });
+      tx.objectStore('kv').put(Secteurs.exporter(), 'secteurs');
       tx.oncomplete = function () { signaler(true); ok(); };
       tx.onerror = tx.onabort = function () { signaler(false); ok(); };
     });
@@ -177,7 +179,7 @@ var Store = (function () {
   return {
     SCHEMA: SCHEMA, init: init, disponible: disponible, demarrer: demarrer, flush: ecrire, surEtat: surEtat,
     enregistrerBatiments: enregistrerBatiments, enregistrerZones: enregistrerZones, enregistrerPrefs: enregistrerPrefs,
-    kvSet: kvSet, kvSetIsole: kvSetIsole, chargerMeta: chargerMeta, getMeta: getMeta, setMeta: setMeta,
+    kvSet: kvSet, enregistrerSecteurs: function (d) { planifier('kv', 'secteurs', d); }, kvSetIsole: kvSetIsole, chargerMeta: chargerMeta, getMeta: getMeta, setMeta: setMeta,
     toutReecrire: toutReecrire, toutEffacer: toutEffacer
   };
 })();

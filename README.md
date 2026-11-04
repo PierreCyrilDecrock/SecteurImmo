@@ -13,7 +13,7 @@ Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre 
 
 Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
 
-## Fonctions actuelles (phases 1 à 4)
+## Fonctions actuelles (phases 1 à 5)
 
 - Carte plein écran (France), fonds : plan OpenStreetMap, plan IGN, vue aérienne IGN (menu en haut à droite).
 - Recherche de ville ou d'adresse avec suggestions (géocodage Géoplateforme IGN, secours Nominatim).
@@ -32,6 +32,17 @@ Barre d'outils sous la recherche :
 Statuts : Non fait (gris), Prospectus déposé (bleu, contour tireté), Contact personnel (vert), Absent / à repasser (orange), Refus / Stop pub (rouge), À rappeler (violet). Chaque statut a aussi un style de contour et une icône (visible à fort zoom) pour rester lisible sans distinguer les couleurs.
 
 La suppression d'un point manuel n'est pas annulable.
+
+### Secteurs et suivi de couverture (phase 5)
+
+Bouton **🗺** (colonne de boutons en haut à droite) :
+- **Dessiner un secteur** : cliquez sur la carte pour poser les sommets (3 minimum), « Retirer le dernier point » pour corriger, puis « Terminer » ; le nom se saisit aussitôt (modifiable avec ✎). Pour changer la forme d'un secteur, supprimez-le et redessinez-le.
+- **Avancement** : pour chaque secteur, nombre de bâtiments, faits, à faire, pourcentage, barre de répartition par statut. Un bâtiment compte dans un secteur si son centre y est situé (les points ajoutés à la main aussi). « Fait » = tout statut sauf « Non fait ». Le pourcentage ne porte que sur les bâtiments **chargés** : utilisez **📥 Charger les bâtiments** pour télécharger tout le secteur (découpé en cases d'environ 1,2 km, une requête Overpass à la fois avec une pause d'une seconde ; maximum 12 cases, sinon le secteur est refusé et il faut le découper).
+- **🔍 Non faits** : met en évidence (contour rouge épais) les maisons restant à faire, en direct à mesure que vous cochez.
+- **⏭ Suivant** : centre la carte sur la maison à faire la plus proche du centre de la vue et ouvre sa fiche ; un nouveau clic propose la suivante.
+- **Colorer selon l'avancement** : remplissage du secteur du clair (peu avancé) au foncé (terminé) ; le pourcentage figure aussi dans l'étiquette du secteur sur la carte.
+- Les secteurs sont sauvegardés automatiquement, inclus dans l'export/import JSON (schéma 2 ; les anciennes sauvegardes de schéma 1 restent importables) et validés à l'import. Supprimer un secteur ne touche pas aux statuts des maisons.
+- Limite : un bâtiment situé dans deux secteurs qui se chevauchent est compté dans les deux.
 
 ### Sauvegarde, export, import (phase 4)
 

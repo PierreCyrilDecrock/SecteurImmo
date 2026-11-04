@@ -11,6 +11,8 @@ var CarteImmo = (function () {
   var elements = {};        // id -> { couche, centre: [lat, lon], icone, manuel, visible }
   var masques = {};         // statutId -> true si masqué par la légende
   var selection = {};       // id -> true
+  var evidence = {};        // id -> true : maisons à faire mises en évidence (secteurs)
+  var ecouteursElements = []; // appelés quand des bâtiments sont ajoutés / retirés
   var surClic = null;       // fonction(id) appelée au clic sur un bâtiment
   var fonds = {}, fondActif = 'Plan OpenStreetMap', surPrefs = null;
 
@@ -91,6 +93,7 @@ var CarteImmo = (function () {
   function styleDe(id) {
     var st = Statuts.parId(Statuts.statutDe(id));
     if (selection[id]) return { color: '#ffd600', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.8, opacity: 1 };
+    if (evidence[id]) return { color: '#ff1744', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.75, opacity: 1 };
     return {
       color: st.contour, weight: st.id === 'aucun' ? 1 : 2.5, dashArray: st.tirets,
       fillColor: st.couleur, fillOpacity: st.id === 'aucun' ? 0.45 : 0.7, opacity: 1
@@ -138,11 +141,15 @@ var CarteImmo = (function () {
     couche.bindTooltip('', { sticky: true });
     couche.on('click', function (e) {
       L.DomEvent.stopPropagation(e);
-      if (surClic) surClic(id);
+      if (surClic) surClic(id, e.latlng);
     });
     appliquer(id);
     majIcones();
+    signalerElements();
   }
+
+  function signalerElements() { ecouteursElements.forEach(function (cb) { cb(); }); }
+  function surElements(cb) { ecouteursElements.push(cb); }
 
   // ---------- Ajout de bâtiments ----------
 
@@ -166,7 +173,8 @@ var CarteImmo = (function () {
     if (!el) return;
     groupe.removeLayer(el.couche);
     if (el.icone) groupeIcones.removeLayer(el.icone);
-    delete elements[id]; delete selection[id];
+    delete elements[id]; delete selection[id]; delete evidence[id];
+    signalerElements();
   }
 
   // ---------- Interaction ----------
@@ -216,6 +224,21 @@ var CarteImmo = (function () {
     avant.concat(ids).forEach(appliquer);
   }
 
+  // Met en évidence (contour rouge) des bâtiments, ex. les maisons restant à faire dans un secteur
+  function mettreEnEvidence(ids) {
+    var avant = Object.keys(evidence);
+    evidence = {};
+    ids.forEach(function (id) { evidence[id] = true; });
+    avant.concat(ids).forEach(appliquer);
+  }
+
+  // Centres de tous les bâtiments connus : { id: [lat, lon] }
+  function tousCentres() {
+    var r = {};
+    Object.keys(elements).forEach(function (id) { r[id] = elements[id].centre; });
+    return r;
+  }
+
   // Recentre la carte sur un résultat de recherche et pose un repère
   function aller(resultat) {
     map.setView([resultat.lat, resultat.lon], resultat.zoom || 16);
@@ -228,6 +251,6 @@ var CarteImmo = (function () {
     afficherBatiments: afficherBatiments, afficherManuel: afficherManuel, retirer: retirer,
     definirSurClic: definirSurClic, filtrer: filtrer, centre: centre, total: total,
     definirSurPrefs: definirSurPrefs, appliquerPrefs: appliquerPrefs, synchroniserManuels: synchroniserManuels,
-    idsDans: idsDans, surligner: surligner, rafraichir: appliquer
+    idsDans: idsDans, dansPolygone: dansPolygone, mettreEnEvidence: mettreEnEvidence, tousCentres: tousCentres, surElements: surElements, surligner: surligner, rafraichir: appliquer
   };
 })();
