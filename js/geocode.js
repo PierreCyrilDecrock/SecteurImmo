@@ -10,6 +10,8 @@ var Geocode = (function () {
 
   var URL_IGN = 'https://data.geopf.fr/geocodage/search';
   var URL_NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+  var URL_IGN_INVERSE = 'https://data.geopf.fr/geocodage/reverse';
+  var URL_NOMINATIM_INVERSE = 'https://nominatim.openstreetmap.org/reverse';
 
   // fetch avec délai maximum, pour ne pas bloquer l'interface
   function fetchJson(url, delaiMs) {
@@ -56,5 +58,22 @@ var Geocode = (function () {
       });
   }
 
-  return { chercher: chercher };
+  // Géocodage inverse : adresse la plus proche d'un point (à la demande, jamais en masse).
+  // Renvoie '' si rien n'est trouvé ; préfixe « ≈ » si le service signale une adresse éloignée.
+  function inverse(lat, lon) {
+    return fetchJson(URL_IGN_INVERSE + '?lon=' + lon + '&lat=' + lat + '&limit=1')
+      .then(function (json) {
+        var f = (json.features || [])[0];
+        if (!f) return '';
+        var p = f.properties || {};
+        var approx = typeof p.distance === 'number' && p.distance > 50;
+        return (approx ? '≈ ' : '') + (p.label || '');
+      })
+      .catch(function () {
+        return fetchJson(URL_NOMINATIM_INVERSE + '?format=jsonv2&lat=' + lat + '&lon=' + lon)
+          .then(function (r) { return (r && r.display_name) || ''; });
+      });
+  }
+
+  return { chercher: chercher, inverse: inverse };
 })();

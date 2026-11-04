@@ -18,6 +18,8 @@
   }
 
   var carte = CarteImmo.init(alerter);
+  Panneau.init();
+  Outils.init(carte);
 
   // ---- Chargement des bâtiments ----
   var btn = document.getElementById('btn-batiments');
@@ -49,6 +51,7 @@
       info.textContent = 'Serveur occupé, nouvel essai ' + n + '/' + max + ' dans ' + Math.round(delai / 1000) + ' s…';
     }).then(function (res) {
       CarteImmo.afficherBatiments(res.nouveaux);
+      Outils.majLegende();
       info.textContent = res.dejaCharge ? 'Zone déjà chargée.' :
         res.nouveaux.length + ' nouveau(x) bâtiment(s) – ' + res.total + ' au total.';
     }).catch(function (err) {

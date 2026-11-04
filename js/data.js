@@ -184,6 +184,7 @@ var DataImmo = (function () {
     adresse: adresse,
     typeBatiment: typeBatiment,
     // Pour les tests / phases suivantes
+    batiment: function (id) { return batiments[id] || null; },
     _batiments: function () { return batiments; }
   };
 })();
