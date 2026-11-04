@@ -182,10 +182,12 @@ var Secteurs = (function () {
   }
   function trousActifs() { return trouActif; }
 
-  // Maison à faire la plus proche du centre de la vue (en évitant de reproposer la même)
+  // Maison à faire la plus proche de ma position (ou du centre de la vue) (en évitant de reproposer la même)
   function suivant(id) {
     var centres = CarteImmo.tousCentres();
-    var c0 = map.getCenter(), k = Math.cos(c0.lat * Math.PI / 180);
+    // Point de départ : ma position si le suivi est actif, sinon le centre de la vue
+    var pos = (window.Position && Position.courante()) || null;
+    var c0 = pos ? L.latLng(pos[0], pos[1]) : map.getCenter(), k = Math.cos(c0.lat * Math.PI / 180);
     var meilleur = null, dMin = Infinity;
     nonFaits(id).forEach(function (b) {
       if (b === dernierSuivant) return;

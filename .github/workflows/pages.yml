@@ -1,0 +1,59 @@
+# Publie l'application (dossier statique) sur GitHub Pages.
+#
+# À faire une fois : dépôt GitHub > Settings > Pages > « Build and deployment » > Source : « GitHub Actions ».
+# Le site sera alors disponible à l'adresse https://<votre-compte>.github.io/<nom-du-dépôt>/
+#
+# ⚠ Seul le code de l'application est publié. Vos données de prospection restent dans VOTRE navigateur :
+# ne committez jamais d'export (secteurimmo-*.json / *.csv). Le contrôle ci-dessous fait échouer la
+# publication si un tel fichier se trouve dans le dépôt.
+name: Publier sur GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier qu'aucune donnée de prospection n'est dans le dépôt
+        run: |
+          trouves=$(git ls-files | grep -Ei '(^|/)(secteurimmo-.*|export.*)\.(json|csv)$' || true)
+          if [ -n "$trouves" ]; then
+            echo "::error::Fichiers de données de prospection détectés, publication annulée :"
+            echo "$trouves"
+            exit 1
+          fi
+
+      - name: Préparer les fichiers à publier
+        run: |
+          mkdir _site
+          cp index.html manifest.json sw.js _site/
+          cp -r css js vendor icons _site/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -64,12 +64,15 @@ var StatsUi = (function () {
     Ui.fermerVolets(); Panneau.fermer();
     racine.hidden = false;
     document.getElementById('btn-stats').setAttribute('aria-pressed', 'true');
+    // Le reste de la page est rendu inerte (clavier et lecteur d'écran restent dans les statistiques)
+    Array.prototype.forEach.call(racine.parentNode.children, function (c) { if (c !== racine && c !== tip) c.inert = true; });
     majSecteurs(); dessiner();
     document.getElementById('stats-fermer').focus();
   }
   function fermer() {
     racine.hidden = true; tip.hidden = true;
-    document.getElementById('btn-stats').setAttribute('aria-pressed', 'false');
+    Array.prototype.forEach.call(racine.parentNode.children, function (c) { c.inert = false; });
+    var b = document.getElementById('btn-stats'); b.setAttribute('aria-pressed', 'false'); b.focus();
   }
 
   function dessiner() {

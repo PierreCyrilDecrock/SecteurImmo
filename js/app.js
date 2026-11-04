@@ -23,6 +23,9 @@
   SecteursUi.init(alerter);
   Outils.init(carte);
   StatsUi.init(alerter);
+  Position.init(carte, alerter);
+  Pwa.init(alerter);
+  Aide.init(alerter);
   Secteurs.surStructure(function () { Store.enregistrerSecteurs(Secteurs.exporter()); });
 
   // ---- Restauration depuis la base locale, puis sauvegarde automatique ----
@@ -69,6 +72,7 @@
   majBouton();
 
   btn.addEventListener('click', function () {
+    if (!navigator.onLine) { alerter('Vous êtes hors ligne : impossible de charger de nouveaux bâtiments.'); return; }
     chargement = true;
     btn.disabled = true;
     btn.textContent = 'Chargement…';

@@ -29,14 +29,18 @@ var CarteImmo = (function () {
   function surveillerErreurs(couche, nom, alerter) {
     var deja = false;
     couche.on('tileerror', function () {
-      if (deja) return;
+      if (deja || !navigator.onLine) return;   // hors ligne : message dédié (pwa.js)
       deja = true;
       alerter('Le fond « ' + nom + ' » ne se charge pas (réseau ou service indisponible).');
     });
   }
 
   function init(alerter) {
-    map = L.map('map', { zoomControl: true, maxZoom: 19, preferCanvas: true }).setView([46.6, 2.5], 6); // France
+    map = L.map('map', {
+      zoomControl: true, maxZoom: 19,
+      // Rendu Canvas (rapide avec des milliers de bâtiments) ; zone de clic élargie au doigt
+      renderer: L.canvas({ tolerance: L.Browser.touch ? 10 : 3 })
+    }).setView([46.6, 2.5], 6); // France
 
     var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -65,8 +69,8 @@ var CarteImmo = (function () {
     L.control.scale({ imperial: false }).addTo(map);
 
     groupe = L.layerGroup().addTo(map);
-    groupeIcones = L.layerGroup();
-    map.on('zoomend', majIcones);
+    groupeIcones = L.layerGroup().addTo(map);
+    map.on('moveend', majIcones);
 
     // Tout changement de statut met à jour l'affichage des bâtiments concernés
     Statuts.surChangement(function (ids) { ids.forEach(appliquer); });
@@ -120,20 +124,32 @@ var CarteImmo = (function () {
     if (!visible && el.visible) { groupe.removeLayer(el.couche); }
     el.visible = visible;
 
-    var st = Statuts.parId(statut);
+    // L'icône n'existe que si le statut en a une, qu'on est assez zoomé et que la maison est dans la vue
+    // (des milliers d'éléments DOM d'icône rendraient la carte lente).
+    el.iconeSt = visible ? Statuts.parId(statut) : null;
+    if (el.iconeSt && !el.iconeSt.icone) el.iconeSt = null;
     if (el.icone) { groupeIcones.removeLayer(el.icone); el.icone = null; }
-    if (visible && st.icone) {
+    majIconeEl(el);
+  }
+
+  var zoneIcones = null;   // zone visible (agrandie) pour laquelle on crée les icônes
+  function majIconeEl(el) {
+    var voulue = !!el.iconeSt && zoneIcones && map.getZoom() >= ZOOM_ICONES && zoneIcones.contains(L.latLng(el.centre[0], el.centre[1]));
+    if (voulue && !el.icone) {
       el.icone = L.marker(el.centre, {
         interactive: false, keyboard: false,
-        icon: L.divIcon({ className: 'icone-statut', html: st.icone, iconSize: [22, 22] })
+        icon: L.divIcon({ className: 'icone-statut', html: el.iconeSt.icone, iconSize: [22, 22] })
       });
       groupeIcones.addLayer(el.icone);
+    } else if (!voulue && el.icone) {
+      groupeIcones.removeLayer(el.icone); el.icone = null;
     }
   }
 
+  // Appelée après chaque déplacement / zoom
   function majIcones() {
-    if (map.getZoom() >= ZOOM_ICONES) { if (!map.hasLayer(groupeIcones)) map.addLayer(groupeIcones); }
-    else if (map.hasLayer(groupeIcones)) map.removeLayer(groupeIcones);
+    zoneIcones = map.getZoom() >= ZOOM_ICONES ? map.getBounds().pad(0.3) : null;
+    Object.keys(elements).forEach(function (id) { majIconeEl(elements[id]); });
   }
 
   function enregistrer(id, couche, centre, manuel) {
@@ -144,7 +160,6 @@ var CarteImmo = (function () {
       if (surClic) surClic(id, e.latlng);
     });
     appliquer(id);
-    majIcones();
     signalerElements();
   }
 

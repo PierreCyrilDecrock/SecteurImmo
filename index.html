@@ -6,10 +6,18 @@
   <!-- Les tuiles OpenStreetMap exigent un en-tête Referer : on garde l'origine -->
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>SecteurImmo – Suivi de prospection</title>
+  <meta name="description" content="Suivi de prospection immobilière sur carte : cochez les maisons où vous avez prospecté.">
+  <meta name="theme-color" content="#1565c0">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SecteurImmo">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<main>
   <!-- Carte plein écran -->
   <div id="map" aria-label="Carte de prospection"></div>
 
@@ -38,7 +46,7 @@
   </div>
 
   <!-- Statistiques -->
-  <button type="button" id="btn-stats" aria-pressed="false" title="Statistiques de prospection">📊</button>
+  <button type="button" id="btn-stats" aria-pressed="false" title="Statistiques de prospection" aria-label="Statistiques de prospection">📊</button>
   <section id="stats" hidden aria-label="Statistiques de prospection">
     <header class="stats-entete">
       <h2>Statistiques</h2>
@@ -61,7 +69,7 @@
   <div id="stats-tip" role="tooltip" hidden></div>
 
   <!-- Secteurs de prospection -->
-  <button type="button" id="btn-secteurs" aria-pressed="false" title="Secteurs : couverture et avancement">🗺</button>
+  <button type="button" id="btn-secteurs" aria-pressed="false" title="Secteurs : couverture et avancement" aria-label="Secteurs : couverture et avancement">🗺</button>
   <div id="secteurs" hidden>
     <strong>Secteurs</strong>
     <p class="aide">Un secteur = une zone dessinée sur la carte. L'avancement compte les bâtiments chargés qu'il contient : chargez-les d'abord.</p>
@@ -71,7 +79,7 @@
   </div>
 
   <!-- Sauvegarde, export, import -->
-  <button type="button" id="btn-donnees" aria-pressed="false" title="Mes données : sauvegarde, export, import">💾</button>
+  <button type="button" id="btn-donnees" aria-pressed="false" title="Mes données : sauvegarde, export, import" aria-label="Mes données : sauvegarde, export, import">💾</button>
   <div id="donnees" hidden>
     <strong>Mes données</strong>
     <p id="donnees-etat"></p>
@@ -106,17 +114,74 @@
     <p id="batiments-info" role="status" aria-live="polite"></p>
   </div>
 
+  <!-- Ma position et aide, au-dessus du bouton de chargement -->
+  <button type="button" id="btn-position" aria-pressed="false" class="bouton-coin coin-droit">📍</button>
+  <button type="button" id="btn-aide" class="bouton-coin coin-gauche" title="Aide" aria-label="Aide">❓</button>
+
+  <dialog id="dlg-aide" aria-labelledby="aide-titre">
+    <button type="button" id="aide-fermer" aria-label="Fermer l'aide">✕</button>
+    <h2 id="aide-titre">Aide – SecteurImmo</h2>
+
+    <h3>Démarrer en 5 étapes</h3>
+    <ol>
+      <li>Cherchez votre ville ou votre rue (barre de recherche) et zoomez jusqu'aux maisons (niveau 16 minimum).</li>
+      <li>Cliquez sur <strong>« Charger les bâtiments de cette zone »</strong> : les maisons apparaissent en gris.</li>
+      <li>Facultatif : <strong>🗺 Secteurs</strong> → dessinez un secteur autour de vos rues, puis chargez ses bâtiments pour suivre le pourcentage couvert.</li>
+      <li>Sur le terrain : <strong>⚡ Tournée</strong>, choisissez un statut (ex. « Prospectus déposé ») puis touchez chaque maison faite.</li>
+      <li><strong>📊 Statistiques</strong> pour suivre l'avancement, et <strong>💾</strong> pour exporter régulièrement vos données.</li>
+    </ol>
+
+    <h3>Les outils</h3>
+    <ul>
+      <li><strong>👆 Consulter</strong> : toucher une maison ouvre sa fiche (statut, date, logements, note).</li>
+      <li><strong>⚡ Tournée</strong> : un statut est actif, chaque maison touchée le reçoit.</li>
+      <li><strong>⬚ Sélection</strong> : glissez un rectangle ou un lasso pour appliquer un statut à plusieurs maisons (la carte ne bouge pas dans ce mode).</li>
+      <li><strong>➕ Ajouter</strong> : place un point pour une maison absente d'OpenStreetMap.</li>
+      <li><strong>↶ Annuler</strong> (ou Ctrl/Cmd + Z) annule les derniers changements. <strong>🎨 Légende</strong> : compteurs et filtre par statut.</li>
+    </ul>
+
+    <h3>Sur le terrain</h3>
+    <ul>
+      <li><strong>📍 Ma position</strong> : point bleu suivi en direct (la carte vous suit ; déplacez la carte pour arrêter de la recentrer, recliquez pour la recentrer, ou cliquez pendant le suivi pour l'arrêter). L'écran reste allumé pendant le suivi si votre navigateur le permet. La position n'est ni enregistrée ni envoyée.</li>
+      <li><strong>⏭ Suivant</strong> (dans Secteurs) amène à la maison restant à faire la plus proche de vous.</li>
+      <li><strong>Installer l'application</strong> : menu du navigateur → « Installer l'application » / « Ajouter à l'écran d'accueil ». Elle démarre ensuite sans connexion avec vos données ; seule la carte (les tuiles) demande du réseau.</li>
+      <li>Hors ligne, les maisons déjà chargées restent affichables et cochables ; il faut du réseau pour charger de nouveaux bâtiments.</li>
+    </ul>
+
+    <h3>Clavier et accessibilité</h3>
+    <ul>
+      <li>Touches fléchées pour déplacer la carte, + / − pour zoomer, <kbd>Échap</kbd> pour revenir au mode Consulter ou fermer un volet.</li>
+      <li>Les maisons se sélectionnent à la souris ou au doigt. Au clavier : <strong>Secteurs → ⏭ Suivant</strong> ou <strong>Statistiques → Liste</strong> (le nom de la maison ouvre sa fiche).</li>
+      <li>Chaque statut a une couleur, un style de contour et une icône. Les thèmes clair et sombre du système sont respectés.</li>
+    </ul>
+
+    <h3>Vos données et leurs limites</h3>
+    <ul>
+      <li>Tout reste dans <strong>votre navigateur</strong>, sur cet appareil : aucun serveur, aucun compte. Les notes peuvent contenir des données personnelles : protégez vos exports. Exportez régulièrement (💾) : vider les données du navigateur efface tout.</li>
+      <li>Les maisons viennent d'OpenStreetMap : certaines manquent, certains bâtiments n'ont pas d'adresse, et un immeuble est un seul bâtiment. Utilisez « ➕ Ajouter » et le champ « logements ».</li>
+    </ul>
+
+    <div class="actions-dialogue">
+      <button type="button" id="aide-installer" hidden>📲 Installer l'application</button>
+    </div>
+    <p class="aide">SecteurImmo – application 100 % locale (HTML / CSS / JavaScript). Cartes © OpenStreetMap, © IGN.</p>
+  </dialog>
+
   <!-- Messages courts (erreurs réseau, infos) -->
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
+</main>
+
   <!-- Scripts classiques (pas de modules ES) : l'ordre compte -->
   <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/pwa.js"></script>
   <script src="js/geocode.js"></script>
   <script src="js/data.js"></script>
   <script src="js/statuts.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/map.js"></script>
   <script src="js/panneau.js"></script>
+  <script src="js/position.js"></script>
   <script src="js/secteurs.js"></script>
   <script src="js/secteurs-ui.js"></script>
   <script src="js/stats.js"></script>
@@ -124,6 +189,7 @@
   <script src="js/outils.js"></script>
   <script src="js/store.js"></script>
   <script src="js/echange.js"></script>
+  <script src="js/aide.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
