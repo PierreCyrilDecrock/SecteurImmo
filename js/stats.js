@@ -47,6 +47,7 @@ var Stats = (function () {
       var rue = (f && f.properties['addr:street']) || rueDe(adr[id]);
       return {
         id: id, statut: r.statut || 'aucun', date: r.date || '', note: r.note || '', logements: r.logements || 0,
+        nom: r.nom || '', tel: r.tel || '',
         adresse: texteAdr, rue: rue || '', secteurs: secteursDe[id] || [], lat: c ? c[0] : null, lon: c ? c[1] : null
       };
     });
@@ -63,6 +64,7 @@ var Stats = (function () {
     var rues = ['Rue des Lilas', 'Avenue du Parc', 'Impasse des Écoles', 'Rue Victor Hugo', 'Allée des Tilleuls', 'Rue du Moulin', 'Chemin des Vignes', 'Rue de la Gare'];
     var secteurs = ['demo-centre', 'demo-lilas'];
     var notes = ['', '', '', 'Propriétaire intéressé par une estimation', 'Rappeler après 18 h', 'Vend dans 2 ans', 'Locataire', 'A déjà un agent', 'Succession en cours', 'Veut un avis de valeur'];
+    var noms = ['M. Martin', 'Mme Bernard', 'M. et Mme Petit', 'Mme Durand', 'M. Leroy', 'Mme Moreau', 'M. Lefèvre', 'Mme Garnier'];
     var statutsFaits = ['prospectus', 'prospectus', 'prospectus', 'contact', 'contact', 'absent', 'absent', 'refus', 'rappeler'];
     var auj = aujourdhui(), items = [], n = 0;
     rues.forEach(function (rue, k) {
@@ -75,7 +77,9 @@ var Stats = (function () {
           date = jourDe(d) + 'T' + pad(9 + Math.floor(rnd() * 10)) + ':' + pad(Math.floor(rnd() * 60));
         }
         var note = (st === 'contact' || st === 'rappeler') ? notes[Math.floor(rnd() * notes.length)] : '';
-        items.push({ id: 'demo/' + (++n), statut: st, date: date, note: note, logements: rnd() < 0.1 ? 2 + Math.floor(rnd() * 6) : 0,
+        var nom = (st === 'contact' || st === 'rappeler') && rnd() < 0.7 ? noms[Math.floor(rnd() * noms.length)] : '';
+        var tel = nom && rnd() < 0.6 ? '06 ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) : '';
+        items.push({ id: 'demo/' + (++n), statut: st, date: date, note: note, nom: nom, tel: tel, logements: rnd() < 0.1 ? 2 + Math.floor(rnd() * 6) : 0,
           adresse: i + ' ' + rue, rue: rue, secteurs: [secteurs[k % 2]], lat: null, lon: null });
       }
     });
@@ -153,7 +157,46 @@ var Stats = (function () {
     return Object.keys(m).map(function (k) { var r = m[k]; r.pct = r.total ? Math.round(100 * r.faits / r.total) : 0; r.termine = r.faits >= r.total; return r; });
   }
 
+  // ---------- Comparaison avec la période précédente, rythme ----------
+
+  // Maisons faites et taux de contact sur la période précédente de même durée (null si période = tout)
+  function precedente(items, periode, secteur) {
+    if (!periode) return null;
+    var auj = aujourdhui();
+    var fin = jourDe(ajouterJours(auj, -periode)), debut = jourDe(ajouterJours(auj, -(2 * periode - 1)));
+    var sel = items.filter(function (e) {
+      if (secteur && e.secteurs.indexOf(secteur) < 0) return false;
+      var j = e.date ? e.date.slice(0, 10) : '';
+      return e.statut !== 'aucun' && j && j >= debut && j <= fin;
+    });
+    return chiffres(sel);
+  }
+
+  // Jours d'affilée avec au moins une maison faite (jusqu'à aujourd'hui, ou hier si rien aujourd'hui)
+  function serieJours(items, secteur) {
+    var jours = {};
+    items.forEach(function (e) { if (e.statut !== 'aucun' && e.date && (!secteur || e.secteurs.indexOf(secteur) >= 0)) jours[e.date.slice(0, 10)] = 1; });
+    var d = aujourdhui();
+    if (!jours[jourDe(d)]) d = ajouterJours(d, -1);
+    var n = 0;
+    while (jours[jourDe(d)]) { n++; d = ajouterJours(d, -1); }
+    return n;
+  }
+
+  // Maisons faites depuis lundi (semaine en cours) et aujourd'hui
+  function rythme(items, secteur) {
+    var auj = aujourdhui(), lun = jourDe(lundi(auj)), j0 = jourDe(auj), semaine = 0, jour = 0;
+    items.forEach(function (e) {
+      if (e.statut === 'aucun' || !e.date || (secteur && e.secteurs.indexOf(secteur) < 0)) return;
+      var j = e.date.slice(0, 10);
+      if (j >= lun) semaine++;
+      if (j === j0) jour++;
+    });
+    return { semaine: semaine, aujourdhui: jour, serie: serieJours(items, secteur) };
+  }
+
   return {
+    precedente: precedente, rythme: rythme,
     rueDe: rueDe, elementsReels: elementsReels, elementsDemo: elementsDemo, nomsDemo: NOMS_DEMO,
     filtrer: filtrer, chiffres: chiffres, serie: serie, rues: rues,
     jourDe: jourDe, aujourdhui: aujourdhui, dateDepuisJour: dateDepuisJour

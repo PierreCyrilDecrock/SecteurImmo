@@ -122,7 +122,7 @@ var Secteurs = (function () {
       c.poly.setStyle(styleSecteur(s, st));
       var el = c.etiquette.getElement();
       var span = el && el.firstChild;
-      if (span) { span.textContent = texte; span.style.borderColor = s.couleur; }
+      if (span) { span.textContent = texte; span.style.setProperty('--c', s.couleur); }
     });
     Object.keys(couches).forEach(function (id) {
       if (!parId(id)) { groupe.removeLayer(couches[id].poly); groupe.removeLayer(couches[id].etiquette); delete couches[id]; }
@@ -183,22 +183,25 @@ var Secteurs = (function () {
   function trousActifs() { return trouActif; }
 
   // Maison à faire la plus proche de ma position (ou du centre de la vue) (en évitant de reproposer la même)
-  function suivant(id) {
+  // depuisId (facultatif) : maison actuelle ; on part d'elle et on ne la repropose pas
+  function suivant(id, depuisId) {
     var centres = CarteImmo.tousCentres();
-    // Point de départ : ma position si le suivi est actif, sinon le centre de la vue
+    // Point de départ : la maison actuelle, sinon ma position si le suivi est actif, sinon le centre de la vue
     var pos = (window.Position && Position.courante()) || null;
-    var c0 = pos ? L.latLng(pos[0], pos[1]) : map.getCenter(), k = Math.cos(c0.lat * Math.PI / 180);
+    var c0 = depuisId && centres[depuisId] ? L.latLng(centres[depuisId][0], centres[depuisId][1]) : (pos ? L.latLng(pos[0], pos[1]) : map.getCenter());
+    var k = Math.cos(c0.lat * Math.PI / 180);
+    var exclu = depuisId || dernierSuivant;
     var meilleur = null, dMin = Infinity;
     nonFaits(id).forEach(function (b) {
-      if (b === dernierSuivant) return;
+      if (b === exclu) return;
       var c = centres[b], dy = c[0] - c0.lat, dx = (c[1] - c0.lng) * k, d = dx * dx + dy * dy;
       if (d < dMin) { dMin = d; meilleur = b; }
     });
-    if (!meilleur && nonFaits(id).length) meilleur = nonFaits(id)[0];
+    if (!meilleur && nonFaits(id).length && nonFaits(id)[0] !== depuisId) meilleur = nonFaits(id)[0];
     dernierSuivant = meilleur;
     if (!meilleur) return null;
     var cc = centres[meilleur];
-    map.setView(cc, Math.max(map.getZoom(), 18), { animate: true });
+    if (Ui.reduitMouvement()) map.setView(cc, Math.max(map.getZoom(), 18)); else map.flyTo(cc, Math.max(map.getZoom(), 18), { duration: 0.6 });
     return meilleur;
   }
 

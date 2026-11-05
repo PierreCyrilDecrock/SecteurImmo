@@ -1,419 +1,437 @@
 /*
- * stats-ui.js – Écran « Statistiques » : résumé, évolution, rues, liste, à rappeler.
- * Les filtres (période, secteur) s'appliquent à tous les onglets.
- * Les textes issus des données sont toujours insérés avec textContent (jamais innerHTML).
+ * stats-ui.js – Vue « Bilan » (tableau de bord) : indicateurs clés comparés à la période précédente,
+ * objectif de la semaine, activité (colonnes empilées par statut), répartition (anneau), secteurs,
+ * rues à terminer, journal filtrable avec export CSV. Les filtres (période, secteur) s'appliquent à tout.
+ * Les textes issus des données sont toujours insérés avec textContent.
  * Expose l'objet global StatsUi.
  */
 var StatsUi = (function () {
   'use strict';
 
   var NS = 'http://www.w3.org/2000/svg';
-  var ONGLETS = [['resume', 'Résumé'], ['evolution', 'Évolution'], ['rues', 'Rues'], ['liste', 'Liste'], ['rappels', 'À rappeler']];
-  var LIGNES_MAX = 200;
+  var LIGNES_MAX = 50;
+  var el = Ui.el, icone = Ui.icone;
+  var racine, tip;
+  var etat = { demo: false, periode: 30, secteur: '', gran: 'jour', tri: 'date', ordre: -1, filtreStatut: '', recherche: '', lignes: LIGNES_MAX };
+  var objectif = 80;
+  var tous = [], items = [], ouvert = false;
 
-  var racine, contenu, tip, alerter = function () {};
-  var etat = { demo: false, periode: 0, secteur: '', onglet: 'resume', gran: 'jour', tri: 'date', ordre: -1, filtreStatut: '', recherche: '', ruesTexte: '', ruesNonTerminees: false, lignes: LIGNES_MAX };
-  var items = [];          // éléments filtrés par période et secteur
-  var tous = [];           // éléments non filtrés (réels ou démo)
-
-  // ---------- Petits outils DOM ----------
-
-  function el(tag, classe, texte) {
-    var e = document.createElement(tag);
-    if (classe) e.className = classe;
-    if (texte !== undefined) e.textContent = texte;
-    return e;
-  }
-  function svg(tag, attrs) {
-    var e = document.createElementNS(NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
-    return e;
-  }
+  function svg(tag, attrs) { var e = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
   function couleur(id) { return 'var(--st-' + id + ')'; }
-  function nombre(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
-  function formatDate(d) {
-    if (!d) return '';
-    var p = d.slice(0, 10).split('-');
-    return p[2] + '/' + p[1] + '/' + p[0] + (d.length > 10 ? ' ' + d.slice(11, 16) : '');
-  }
-  function pastille(id) { var s = el('span', 'pastille'); s.style.background = couleur(id); s.style.borderColor = couleur(id); return s; }
+  function nombre(n) { return Ui.nombre(n); }
   function nomSecteur(id) {
     if (Stats.nomsDemo[id]) return Stats.nomsDemo[id];
     var s = Secteurs.liste().filter(function (x) { return x.id === id; })[0];
     return s ? s.nom : '';
   }
+  function formatDate(d) { if (!d) return ''; var p = d.slice(0, 10).split('-'); return p[2] + '/' + p[1] + '/' + p[0] + (d.length > 10 ? ' ' + d.slice(11, 16) : ''); }
+  function bloc(classes, titre, ic, droite) {
+    var b = el('section', 'bloc ' + classes);
+    var t = el('div', 'bloc-tete');
+    if (ic) t.appendChild(icone(ic, 'ic-sm'));
+    t.appendChild(el('h3', null, titre));
+    if (droite) t.appendChild(droite);
+    b.appendChild(t);
+    var c = el('div', 'bloc-corps'); b.appendChild(c);
+    return { bloc: b, corps: c };
+  }
+  function videBloc(texte, ic) {
+    var v = el('div', 'vide'); var m = el('div', 'medaillon'); m.appendChild(icone(ic || 'inbox', 'ic-lg')); v.appendChild(m); v.appendChild(el('span', null, texte)); return v;
+  }
 
-  // ---------- Ouverture / données ----------
-
+  // ---------- Données ----------
   function charger() {
     tous = etat.demo ? Stats.elementsDemo() : Stats.elementsReels();
     items = Stats.filtrer(tous, etat.periode, etat.secteur);
   }
 
-  function majSecteurs() {
-    var sel = document.getElementById('stats-secteur');
-    sel.innerHTML = '';
-    var o = el('option', null, 'Tous les secteurs'); o.value = ''; sel.appendChild(o);
+  // ---------- En-tête et filtres ----------
+  function entete() {
+    var t = el('div', 'tableau-tete');
+    var titres = el('div', 'titres');
+    var h = el('h1', null, 'Bilan'); h.id = 'titre-tableau'; titres.appendChild(h);
+    var auj = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    titres.appendChild(el('p', 'sous-titre', auj.charAt(0).toUpperCase() + auj.slice(1) + ' · ' + (etat.periode ? etat.periode + ' derniers jours' : 'depuis le début')));
+    t.appendChild(titres);
+
+    var f = el('div', 'filtres');
+    var seg = el('div', 'segments'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Période');
+    [[7, '7 j'], [30, '30 j'], [90, '90 j'], [0, 'Tout']].forEach(function (p) {
+      var b = Ui.bouton(p[1], '', function () { etat.periode = p[0]; etat.lignes = LIGNES_MAX; dessiner(); }, { 'aria-pressed': etat.periode === p[0] ? 'true' : 'false' });
+      b.dataset.periode = p[0]; seg.appendChild(b);
+    });
+    f.appendChild(seg);
+    var sel = el('select', 'saisie'); sel.id = 'stats-secteur'; sel.setAttribute('aria-label', 'Secteur');
+    var o0 = el('option', null, 'Tous les secteurs'); o0.value = ''; sel.appendChild(o0);
     var liste = etat.demo ? Object.keys(Stats.nomsDemo).map(function (id) { return { id: id, nom: Stats.nomsDemo[id] }; }) : Secteurs.liste();
-    liste.forEach(function (s) { var x = el('option', null, s.nom); x.value = s.id; sel.appendChild(x); });
+    liste.forEach(function (s) { var o = el('option', null, s.nom); o.value = s.id; sel.appendChild(o); });
     if (!liste.some(function (s) { return s.id === etat.secteur; })) etat.secteur = '';
     sel.value = etat.secteur;
-  }
-
-  function ouvrir() {
-    Ui.fermerVolets(); Panneau.fermer();
-    racine.hidden = false;
-    document.getElementById('btn-stats').setAttribute('aria-pressed', 'true');
-    // Le reste de la page est rendu inerte (clavier et lecteur d'écran restent dans les statistiques)
-    Array.prototype.forEach.call(racine.parentNode.children, function (c) { if (c !== racine && c !== tip) c.inert = true; });
-    majSecteurs(); dessiner();
-    document.getElementById('stats-fermer').focus();
-  }
-  function fermer() {
-    racine.hidden = true; tip.hidden = true;
-    Array.prototype.forEach.call(racine.parentNode.children, function (c) { c.inert = false; });
-    var b = document.getElementById('btn-stats'); b.setAttribute('aria-pressed', 'false'); b.focus();
-  }
-
-  function dessiner() {
-    charger();
-    document.getElementById('stats-demo-bandeau').hidden = !etat.demo;
-    document.querySelectorAll('#stats-onglets [role=tab]').forEach(function (b) {
-      var actif = b.dataset.onglet === etat.onglet;
-      b.setAttribute('aria-selected', actif ? 'true' : 'false'); b.tabIndex = actif ? 0 : -1;
-    });
-    contenu.innerHTML = ''; tip.hidden = true;
-    contenu.setAttribute('aria-labelledby', 'onglet-' + etat.onglet);
-    ({ resume: resume, evolution: evolution, rues: ruesVue, liste: liste, rappels: rappels })[etat.onglet]();
-  }
-
-  // ---------- Résumé ----------
-
-  function tuile(valeur, libelle, aide, statut) {
-    var t = el('div', 'tuile');
-    if (aide) t.title = aide;
-    var v = el('div', 'tuile-valeur'); if (statut) v.appendChild(pastille(statut)); v.appendChild(document.createTextNode(valeur));
-    t.appendChild(v); t.appendChild(el('div', 'tuile-libelle', libelle));
+    sel.addEventListener('change', function () { etat.secteur = sel.value; etat.lignes = LIGNES_MAX; dessiner(); });
+    f.appendChild(sel);
+    var demo = el('label', 'interrupteur'); var cb = el('input'); cb.type = 'checkbox'; cb.id = 'stats-demo'; cb.checked = etat.demo;
+    cb.addEventListener('change', function () { etat.demo = cb.checked; etat.secteur = ''; dessiner(); });
+    demo.appendChild(cb); demo.appendChild(el('span', 'piste')); demo.appendChild(document.createTextNode('Données d\'exemple'));
+    f.appendChild(demo);
+    t.appendChild(f);
     return t;
   }
 
-  function resume() {
+  // ---------- Indicateurs ----------
+  function ecart(actuel, precedent, suffixe, decimal) {
+    if (precedent === null || precedent === undefined || actuel === null) return null;
+    var d = actuel - precedent;
+    var s = el('span', 'ecart ' + (d > 0 ? 'hausse' : d < 0 ? 'baisse' : 'stable'));
+    s.appendChild(icone(d > 0 ? 'trending-up' : d < 0 ? 'trending-down' : 'arrow-right'));
+    s.appendChild(document.createTextNode((d > 0 ? '+' : '') + (decimal ? String(Math.round(d * 10) / 10).replace('.', ',') : Math.round(d)) + (suffixe || '')));
+    return s;
+  }
+  function kpi(ic, c, libelle, valeur, fmt, pied, onClick, i) {
+    var k = el('div', 'bloc kpi' + (onClick ? ' cliquable' : ''));
+    k.style.animationDelay = i * 50 + 'ms';
+    if (onClick) { k.tabIndex = 0; k.setAttribute('role', 'button'); k.addEventListener('click', onClick); k.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }); }
+    var t = el('div', 'kpi-tete'); var ki = el('span', 'kpi-ic'); ki.style.setProperty('--c', c); ki.appendChild(icone(ic, 'ic-sm')); t.appendChild(ki); t.appendChild(el('span', null, libelle));
+    k.appendChild(t);
+    var v = el('div', 'kpi-valeur'); k.appendChild(v);
+    if (valeur === null) v.textContent = '—'; else Ui.compter(v, valeur, fmt);
+    var p = el('div', 'kpi-pied'); (pied || []).forEach(function (x) { if (x) p.appendChild(typeof x === 'string' ? document.createTextNode(x) : x); });
+    k.appendChild(p);
+    return k;
+  }
+  function indicateurs() {
     var c = Stats.chiffres(items);
-    var g = el('div', 'tuiles');
-    g.appendChild(tuile(nombre(c.faits), 'Maisons faites' + (etat.periode ? '' : ' (sur ' + nombre(c.total) + ')'), 'Toutes les maisons ayant un statut autre que « Non fait »'));
-    g.appendChild(tuile(c.tauxContact === null ? '—' : String(c.tauxContact).replace('.', ',') + ' %', 'Taux de contact', 'Contacts personnels ÷ maisons faites'));
-    g.appendChild(tuile(nombre(c.par.prospectus), 'Prospectus déposés', null, 'prospectus'));
-    g.appendChild(tuile(nombre(c.par.contact), 'Contacts personnels', null, 'contact'));
-    g.appendChild(tuile(nombre(c.par.rappeler), 'À rappeler', null, 'rappeler'));
-    g.appendChild(tuile(nombre(c.par.absent), 'Absents / à repasser', null, 'absent'));
-    g.appendChild(tuile(nombre(c.par.refus), 'Refus / Stop pub', null, 'refus'));
-    g.appendChild(tuile(nombre(c.logements), 'Logements touchés', 'Somme des logements déclarés (1 par défaut)'));
-    contenu.appendChild(g);
-
-    if (!c.total) { contenu.appendChild(el('p', 'vide', 'Aucune donnée pour ces filtres.')); return; }
-    contenu.appendChild(el('h3', null, 'Répartition' + (etat.periode ? '' : ' (avec les maisons non faites)')));
-    var ordre = Statuts.ORDRE_GRAPHIQUE.concat(etat.periode ? [] : ['aucun']);
-    var total = ordre.reduce(function (s, id) { return s + c.par[id]; }, 0);
-    var barre = el('div', 'rep-barre'); barre.setAttribute('role', 'img');
-    barre.setAttribute('aria-label', 'Répartition des ' + total + ' maisons par statut');
-    ordre.forEach(function (id) {
-      if (!c.par[id]) return;
-      var s = el('span'); s.style.width = (100 * c.par[id] / total) + '%'; s.style.background = couleur(id);
-      s.title = Statuts.parId(id).label + ' : ' + c.par[id];
-      barre.appendChild(s);
-    });
-    contenu.appendChild(barre);
-    var ul = el('ul', 'rep-legende');
-    ordre.forEach(function (id) {
-      var li = el('li'); li.appendChild(pastille(id));
-      li.appendChild(el('span', 'rep-nom', Statuts.parId(id).label));
-      li.appendChild(el('span', 'rep-n', nombre(c.par[id])));
-      li.appendChild(el('span', 'rep-pct', total ? Math.round(100 * c.par[id] / total) + ' %' : ''));
-      ul.appendChild(li);
-    });
-    contenu.appendChild(ul);
+    var prec = Stats.precedente(tous, etat.periode, etat.secteur);
+    var g = el('div', 'kpis');
+    var vsTxt = prec ? 'vs ' + etat.periode + ' j précédents' : null;
+    g.appendChild(kpi('house', 'var(--texte)', 'Maisons faites', c.faits, nombre,
+      prec ? [ecart(c.faits, prec.faits), vsTxt] : ['sur ' + nombre(c.total) + ' maisons connues'], null, 0));
+    g.appendChild(kpi('message-circle', 'var(--st-contact)', 'Taux de contact', c.tauxContact, function (v) { return String(Math.round(v * 10) / 10).replace('.', ',') + ' %'; },
+      [prec && prec.tauxContact !== null && c.tauxContact !== null ? ecart(c.tauxContact, prec.tauxContact, ' pt', true) : null, 'contacts ÷ maisons faites'], null, 1));
+    g.appendChild(kpi('user', 'var(--st-contact)', 'Contacts personnels', c.par.contact, nombre, prec ? [ecart(c.par.contact, prec.par.contact), vsTxt] : [nombre(c.par.prospectus) + ' prospectus déposés'], null, 2));
+    g.appendChild(kpi('phone-call', 'var(--st-rappeler)', 'À rappeler', c.par.rappeler, nombre, ['Voir la liste', icone('arrow-right', 'ic-sm')],
+      etat.demo ? null : function () { Coquille.ouvrirTiroir('rappels'); }, 3));
+    return g;
   }
 
-  // ---------- Évolution (colonnes empilées par statut) ----------
+  // ---------- Objectif de la semaine ----------
+  function blocObjectif() {
+    var r = Stats.rythme(tous, etat.secteur);
+    var b = bloc('s4', 'Objectif de la semaine', 'goal', Ui.bouton(icone('pencil', 'ic-sm'), 'btn btn-fantome btn-icone btn-sm', function () { editer(); }, { 'aria-label': 'Modifier l\'objectif', 'data-tip': 'Modifier', id: 'objectif-modifier' }));
+    var o = el('div', 'objectif');
+    var pct = objectif ? Math.min(100, Math.round(100 * r.semaine / objectif)) : 0;
+    var centre = el('span'); centre.style.display = 'flex'; centre.style.flexDirection = 'column'; centre.style.alignItems = 'center';
+    var nb = el('span', 'num'); Ui.compter(nb, r.semaine, nombre); centre.appendChild(nb); centre.appendChild(el('small', null, 'sur ' + nombre(objectif)));
+    var an = Ui.anneau(pct, 132, 12, r.semaine >= objectif ? 'var(--st-contact)' : 'var(--primaire)', centre);
+    o.appendChild(an);
+    var tx = el('div', 'objectif-texte');
+    tx.appendChild(el('p', 'sous-titre', r.semaine >= objectif ? 'Objectif atteint, bravo !' : 'Encore ' + nombre(objectif - r.semaine) + ' maison' + (objectif - r.semaine > 1 ? 's' : '') + ' d\'ici dimanche.'));
+    var ms = el('div', 'mini-stats');
+    function mini(ic, valeur, libelle) { var d = el('div', 'mini-stat'); var s = el('strong'); if (ic) s.appendChild(icone(ic)); s.appendChild(document.createTextNode(valeur)); d.appendChild(s); d.appendChild(el('span', null, libelle)); return d; }
+    ms.appendChild(mini(null, nombre(r.aujourdhui), 'aujourd\'hui'));
+    ms.appendChild(mini(r.serie ? 'flame' : null, r.serie + ' j', 'série d\'activité'));
+    tx.appendChild(ms);
+    o.appendChild(tx);
+    b.corps.appendChild(o);
 
+    function editer() {
+      b.corps.innerHTML = '';
+      var f = el('form'); f.style.display = 'flex'; f.style.gap = '8px'; f.style.alignItems = 'flex-end';
+      var i = el('input', 'saisie'); i.type = 'number'; i.min = '1'; i.max = '5000'; i.value = objectif; i.id = 'objectif-saisie';
+      var c = el('label', 'champ'); c.style.flex = '1'; c.appendChild(el('span', null, 'Maisons à faire par semaine')); c.appendChild(i);
+      f.appendChild(c); f.appendChild(Ui.bouton('Enregistrer', 'btn btn-primaire', null, { type: 'submit' }));
+      f.querySelector('button').type = 'submit';
+      f.addEventListener('submit', function (e) { e.preventDefault(); var n = parseInt(i.value, 10); if (n > 0) definirObjectif(n); dessiner(); });
+      b.corps.appendChild(f); i.focus(); i.select();
+    }
+    return b.bloc;
+  }
+
+  // ---------- Activité (colonnes empilées) ----------
   function echelle(max) {
-    var pas = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000].filter(function (p) { return max / p <= 5; })[0] || 1000;
+    var pas = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000].filter(function (p) { return max / p <= 4; })[0] || 1000;
     return { pas: pas, max: Math.max(pas, Math.ceil(max / pas) * pas) };
   }
-
-  function colonneArrondie(x, y, w, h, r) { // coins arrondis en haut seulement ; carré sur la ligne de base
+  function colonneArrondie(x, y, w, h, r) {
     r = Math.min(r, h, w / 2);
-    return 'M' + x + ',' + (y + h) + 'L' + x + ',' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y +
-      'L' + (x + w - r) + ',' + y + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'L' + (x + w) + ',' + (y + h) + 'Z';
+    return 'M' + x + ',' + (y + h) + 'L' + x + ',' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'L' + (x + w - r) + ',' + y + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'L' + (x + w) + ',' + (y + h) + 'Z';
   }
-
-  function infobulle(b, evt, ancre) {
-    tip.innerHTML = '';
-    tip.appendChild(el('div', 'tip-titre', b.libelleLong));
-    tip.appendChild(el('div', 'tip-total', nombre(b.total) + ' maison' + (b.total > 1 ? 's' : '')));
-    Statuts.ORDRE_GRAPHIQUE.forEach(function (id) {
-      if (!b.par[id]) return;
-      var l = el('div', 'tip-ligne'); var cle = el('span', 'tip-cle'); cle.style.background = couleur(id);
-      l.appendChild(cle); l.appendChild(el('span', 'tip-n', nombre(b.par[id]))); l.appendChild(el('span', 'tip-nom', Statuts.parId(id).label));
-      tip.appendChild(l);
-    });
+  function placerTip(ancre) {
     tip.hidden = false;
     var r = ancre.getBoundingClientRect(), t = tip.getBoundingClientRect();
-    var x = Math.min(window.innerWidth - t.width - 8, Math.max(8, r.left + r.width / 2 - t.width / 2));
-    var y = Math.max(8, r.top - t.height - 6);
-    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    tip.style.left = Math.min(window.innerWidth - t.width - 8, Math.max(8, r.left + r.width / 2 - t.width / 2)) + 'px';
+    tip.style.top = Math.max(8, r.top - t.height - 8) + 'px';
+  }
+  function tipLignes(titre, total, lignes) {
+    tip.innerHTML = '';
+    tip.appendChild(el('div', 't', titre));
+    tip.appendChild(el('div', 'v', total));
+    lignes.forEach(function (l) {
+      var d = el('div', 'l'); var k = el('i'); k.style.background = couleur(l.id); d.appendChild(k); d.appendChild(el('b', null, nombre(l.n))); d.appendChild(el('span', null, Statuts.parId(l.id).label)); tip.appendChild(d);
+    });
   }
 
-  function evolution() {
-    var barreOutils = el('div', 'barre-outils');
-    barreOutils.appendChild(el('span', null, 'Maisons faites par'));
+  function blocActivite() {
+    var seg = el('div', 'segments');
     [['jour', 'Jour'], ['semaine', 'Semaine']].forEach(function (x) {
-      var b = el('button', 'btn-seg', x[1]); b.type = 'button'; b.setAttribute('aria-pressed', etat.gran === x[0] ? 'true' : 'false');
-      b.addEventListener('click', function () { etat.gran = x[0]; dessiner(); });
-      barreOutils.appendChild(b);
+      seg.appendChild(Ui.bouton(x[1], '', function () { etat.gran = x[0]; dessiner(); }, { 'aria-pressed': etat.gran === x[0] ? 'true' : 'false', 'data-gran': x[0] }));
     });
-    contenu.appendChild(barreOutils);
-
+    var b = bloc('s8 large', 'Activité', 'chart-column', seg);
     var s = Stats.serie(items, etat.periode, etat.gran);
-    var totalPeriode = s.buckets.reduce(function (t, b) { return t + b.total; }, 0);
-    contenu.appendChild(el('p', 'aide', nombre(totalPeriode) + ' maison(s) faite(s) sur la période' +
-      (s.auto ? ' — regroupées par semaine (trop de jours à afficher).' : '.') +
-      ' La date retenue est celle du dernier changement de statut de chaque maison.'));
-    if (!totalPeriode) { contenu.appendChild(el('p', 'vide', 'Aucune maison faite sur cette période.')); return; }
+    var total = s.buckets.reduce(function (t, x) { return t + x.total; }, 0);
+    b.corps.appendChild(el('p', 'sous-titre', nombre(total) + ' maison' + (total > 1 ? 's' : '') + ' faite' + (total > 1 ? 's' : '') + (s.auto ? ' · regroupées par semaine' : '') + ' · date du dernier passage'));
+    if (!total) { b.corps.appendChild(videBloc('Aucune maison faite sur cette période.', 'chart-column')); return b.bloc; }
 
-    var largeur = Math.max(300, contenu.clientWidth || 600), hauteur = 260;
-    var m = { g: 36, d: 8, h: 12, b: 40 }, W = largeur - m.g - m.d, H = hauteur - m.h - m.b;
-    var max = s.buckets.reduce(function (mx, b) { return Math.max(mx, b.total); }, 0), ech = echelle(max);
-    var y = function (v) { return m.h + H - v / ech.max * H; };
-    var n = s.buckets.length, fente = W / n, barL = Math.min(24, Math.max(3, fente * 0.72));
-
-    var c = svg('svg', { viewBox: '0 0 ' + largeur + ' ' + hauteur, width: largeur, height: hauteur, class: 'graphique', role: 'group', 'aria-label': 'Maisons faites par ' + s.granularite + ', colonnes empilées par statut' });
-    for (var v = 0; v <= ech.max; v += ech.pas) {
-      c.appendChild(svg('line', { x1: m.g, x2: m.g + W, y1: y(v), y2: y(v), class: 'grille' }));
-      var t = svg('text', { x: m.g - 6, y: y(v) + 4, class: 'axe', 'text-anchor': 'end' }); t.textContent = v; c.appendChild(t);
-    }
-    var pasX = Math.max(1, Math.ceil(46 / fente));
-    s.buckets.forEach(function (b, i) {
-      var cx = m.g + fente * i + fente / 2, x0 = cx - barL / 2, cumul = 0;
-      var gr = svg('g', { class: 'colonne' });
-      Statuts.ORDRE_GRAPHIQUE.forEach(function (id) {
-        var nb = b.par[id]; if (!nb) return;
-        var haut = y(cumul + nb), hSeg = (y(cumul) - haut) - (cumul ? 2 : 0); // écart de 2 px entre segments empilés
-        var estDernier = (cumul + nb) === b.total;
-        var d = estDernier ? colonneArrondie(x0, haut, barL, Math.max(1, hSeg), 4) : 'M' + x0 + ',' + haut + 'h' + barL + 'v' + Math.max(1, hSeg) + 'h' + (-barL) + 'Z';
-        var p = svg('path', { d: d, class: 'segment' }); p.style.fill = couleur(id);
-        gr.appendChild(p);
-        cumul += nb;
-      });
-      if (i % pasX === 0 || i === n - 1) {
-        var lab = svg('text', { x: cx, y: hauteur - m.b + 16, class: 'axe', 'text-anchor': pasX > 1 || n > 14 ? 'end' : 'middle' });
-        if (pasX > 1 || n > 14) lab.setAttribute('transform', 'rotate(-40 ' + cx + ' ' + (hauteur - m.b + 16) + ')');
-        lab.textContent = b.label; c.appendChild(lab);
+    var cadre = el('div', 'cadre-graphique'); b.corps.appendChild(cadre);
+    // Dessin après insertion (largeur réelle connue)
+    requestAnimationFrame(function () {
+      var largeur = Math.max(300, cadre.clientWidth || 640), hauteur = 230;
+      var m = { g: 34, d: 6, h: 10, b: 36 }, W = largeur - m.g - m.d, H = hauteur - m.h - m.b;
+      var max = s.buckets.reduce(function (mx, x) { return Math.max(mx, x.total); }, 0), ech = echelle(max);
+      var y = function (v) { return m.h + H - v / ech.max * H; };
+      var n = s.buckets.length, fente = W / n, barL = Math.min(24, Math.max(3, fente * 0.62));
+      var c = svg('svg', { viewBox: '0 0 ' + largeur + ' ' + hauteur, width: largeur, height: hauteur, class: 'graphique', role: 'group', 'aria-label': 'Maisons faites par ' + s.granularite + ', colonnes empilées par statut' });
+      for (var v = 0; v <= ech.max; v += ech.pas) {
+        c.appendChild(svg('line', { x1: m.g, x2: m.g + W, y1: y(v), y2: y(v), class: 'grille' }));
+        var tx = svg('text', { x: m.g - 8, y: y(v) + 4, class: 'axe', 'text-anchor': 'end' }); tx.textContent = v; c.appendChild(tx);
       }
-      // Zone de survol plus large que la colonne (toute la fente, toute la hauteur) ; accessible au clavier
-      var hit = svg('rect', { x: m.g + fente * i, y: m.h, width: fente, height: H, class: 'zone', tabindex: 0, role: 'img',
-        'aria-label': b.libelleLong + ' : ' + b.total + ' maison(s)' });
-      hit.addEventListener('pointerenter', function (e) { infobulle(b, e, gr.firstChild || hit); });
-      hit.addEventListener('focus', function () { infobulle(b, null, gr.firstChild || hit); });
-      hit.addEventListener('pointerleave', function () { tip.hidden = true; });
-      hit.addEventListener('blur', function () { tip.hidden = true; });
-      c.appendChild(gr); c.appendChild(hit);
+      var pasX = Math.max(1, Math.ceil(52 / fente));
+      s.buckets.forEach(function (bk, i) {
+        var cx = m.g + fente * i + fente / 2, x0 = cx - barL / 2, cumul = 0;
+        var gr = svg('g', { class: 'colonne' });
+        Statuts.ORDRE_GRAPHIQUE.forEach(function (id) {
+          var nb = bk.par[id]; if (!nb) return;
+          var haut = y(cumul + nb), hSeg = (y(cumul) - haut) - (cumul ? 2 : 0);
+          var dernier = cumul + nb === bk.total;
+          var d = dernier ? colonneArrondie(x0, haut, barL, Math.max(1, hSeg), 4) : 'M' + x0 + ',' + haut + 'h' + barL + 'v' + Math.max(1, hSeg) + 'h' + (-barL) + 'Z';
+          var p = svg('path', { d: d, class: 'segment' }); p.style.fill = couleur(id); p.style.animationDelay = Math.min(i * 12, 400) + 'ms';
+          gr.appendChild(p); cumul += nb;
+        });
+        if (i % pasX === 0 || i === n - 1) {
+          var lab = svg('text', { x: cx, y: hauteur - m.b + 18, class: 'axe', 'text-anchor': 'middle' });
+          lab.textContent = bk.label.replace('Sem. du ', ''); c.appendChild(lab);
+        }
+        var hit = svg('rect', { x: m.g + fente * i, y: m.h, width: fente, height: H, class: 'zone', tabindex: 0, role: 'img', 'aria-label': bk.libelleLong + ' : ' + bk.total + ' maison(s)' });
+        var montrer = function () {
+          tipLignes(bk.libelleLong, nombre(bk.total) + ' maison' + (bk.total > 1 ? 's' : ''), Statuts.ORDRE_GRAPHIQUE.filter(function (id) { return bk.par[id]; }).map(function (id) { return { id: id, n: bk.par[id] }; }));
+          placerTip(gr.firstChild || hit);
+        };
+        hit.addEventListener('pointerenter', montrer); hit.addEventListener('focus', montrer);
+        hit.addEventListener('pointerleave', function () { tip.hidden = true; }); hit.addEventListener('blur', function () { tip.hidden = true; });
+        c.appendChild(gr); c.appendChild(hit);
+      });
+      c.appendChild(svg('line', { x1: m.g, x2: m.g + W, y1: y(0), y2: y(0), class: 'ligne-base' }));
+      cadre.appendChild(c);
     });
-    c.appendChild(svg('line', { x1: m.g, x2: m.g + W, y1: y(0), y2: y(0), class: 'ligne-base' }));
-    var cadre = el('div', 'cadre-graphique'); cadre.appendChild(c); contenu.appendChild(cadre);
 
-    var leg = el('ul', 'rep-legende en-ligne');
-    Statuts.ORDRE_GRAPHIQUE.forEach(function (id) {
-      var li = el('li'); li.appendChild(pastille(id)); li.appendChild(el('span', 'rep-nom', Statuts.parId(id).label)); leg.appendChild(li);
-    });
-    contenu.appendChild(leg);
-
-    // Vue tableau : les valeurs restent accessibles sans survol
-    var det = el('details'); det.appendChild(el('summary', null, 'Afficher les valeurs en tableau'));
+    var leg = el('ul', 'legende-graphique');
+    Statuts.ORDRE_GRAPHIQUE.forEach(function (id) { var li = el('li'); var p = el('span', 'pastille'); p.style.setProperty('--c', couleur(id)); li.appendChild(p); li.appendChild(document.createTextNode(Statuts.parId(id).label)); leg.appendChild(li); });
+    b.corps.appendChild(leg);
+    var det = el('details', 'valeurs'); det.appendChild(el('summary', null, 'Voir les valeurs en tableau'));
+    var tw = el('div', 'table-defilante'); tw.style.marginTop = '8px';
     var tb = el('table', 'tableau'); var th = el('tr'); th.appendChild(el('th', null, s.granularite === 'semaine' ? 'Semaine' : 'Jour'));
-    Statuts.ORDRE_GRAPHIQUE.forEach(function (id) { th.appendChild(el('th', null, Statuts.parId(id).label)); }); th.appendChild(el('th', null, 'Total'));
+    Statuts.ORDRE_GRAPHIQUE.forEach(function (id) { th.appendChild(el('th', 'num', Statuts.parId(id).court)); }); th.appendChild(el('th', 'num', 'Total'));
     var thead = el('thead'); thead.appendChild(th); tb.appendChild(thead);
     var tbody = el('tbody');
-    s.buckets.forEach(function (b) {
-      if (!b.total) return;
-      var tr = el('tr'); tr.appendChild(el('th', null, b.libelleLong));
-      Statuts.ORDRE_GRAPHIQUE.forEach(function (id) { tr.appendChild(el('td', 'num', b.par[id])); });
-      tr.appendChild(el('td', 'num', b.total)); tbody.appendChild(tr);
+    s.buckets.forEach(function (bk) {
+      if (!bk.total) return;
+      var tr = el('tr'); tr.appendChild(el('th', null, bk.libelleLong));
+      Statuts.ORDRE_GRAPHIQUE.forEach(function (id) { tr.appendChild(el('td', 'num', bk.par[id])); }); tr.appendChild(el('td', 'num', bk.total));
+      tbody.appendChild(tr);
     });
-    tb.appendChild(tbody); det.appendChild(tb); contenu.appendChild(det);
+    tb.appendChild(tbody); tw.appendChild(tb); det.appendChild(tw); b.corps.appendChild(det);
+    return b.bloc;
   }
 
-  // ---------- Rues ----------
+  // ---------- Répartition (anneau) ----------
+  function arc(cx, cy, R, r, a0, a1) {
+    function pt(rad, a) { return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)]; }
+    var grand = a1 - a0 > Math.PI ? 1 : 0, p0 = pt(R, a0), p1 = pt(R, a1), p2 = pt(r, a1), p3 = pt(r, a0);
+    return 'M' + p0 + 'A' + R + ',' + R + ' 0 ' + grand + ' 1 ' + p1 + 'L' + p2 + 'A' + r + ',' + r + ' 0 ' + grand + ' 0 ' + p3 + 'Z';
+  }
+  function blocRepartition() {
+    var b = bloc('s4', 'Répartition', 'chart-pie');
+    var c = Stats.chiffres(items);
+    var ordre = Statuts.ORDRE_GRAPHIQUE.concat(etat.periode ? [] : ['aucun']);
+    var total = ordre.reduce(function (t, id) { return t + c.par[id]; }, 0);
+    if (!total) { b.corps.appendChild(videBloc('Rien à afficher pour ces filtres.', 'chart-pie')); return b.bloc; }
+    var w = el('div', 'repartition');
+    var T = 132, cx = T / 2, R = 62, r = 44;
+    var s = svg('svg', { width: T, height: T, viewBox: '0 0 ' + T + ' ' + T, role: 'img', 'aria-label': 'Répartition de ' + total + ' maisons par statut' });
+    var a = -Math.PI / 2, ecartA = ordre.filter(function (id) { return c.par[id]; }).length > 1 ? 0.025 : 0;
+    ordre.forEach(function (id) {
+      var n = c.par[id]; if (!n) return;
+      var da = 2 * Math.PI * n / total;
+      var p = svg('path', { d: arc(cx, cx, R, r, a + ecartA / 2, a + Math.max(da - ecartA / 2, ecartA / 2 + 0.001) - (da >= 2 * Math.PI ? 0.0001 : 0)) });
+      p.style.fill = couleur(id);
+      p.addEventListener('pointerenter', function () { tipLignes(Statuts.parId(id).label, nombre(n) + ' · ' + Math.round(100 * n / total) + ' %', []); placerTip(p); });
+      p.addEventListener('pointerleave', function () { tip.hidden = true; });
+      s.appendChild(p); a += da;
+    });
+    var t1 = svg('text', { x: cx, y: cx + 4, 'text-anchor': 'middle', class: 'centre-anneau' }); t1.textContent = nombre(total); s.appendChild(t1);
+    var t2 = svg('text', { x: cx, y: cx + 20, 'text-anchor': 'middle', class: 'centre-libelle' }); t2.textContent = 'maisons'; s.appendChild(t2);
+    w.appendChild(s);
+    var ul = el('ul', 'liste-repartition');
+    ordre.forEach(function (id) {
+      var li = el('li'); var p = el('span', 'pastille'); p.style.setProperty('--c', couleur(id)); li.appendChild(p);
+      li.appendChild(el('span', null, Statuts.parId(id).court)); li.appendChild(el('span', 'n', nombre(c.par[id]))); li.appendChild(el('span', 'p', Math.round(100 * c.par[id] / total) + ' %'));
+      ul.appendChild(li);
+    });
+    w.appendChild(ul);
+    b.corps.appendChild(w);
+    return b.bloc;
+  }
 
-  function ruesVue() {
-    var outils = el('div', 'barre-outils');
-    var rech = el('input'); rech.type = 'search'; rech.placeholder = 'Chercher une rue…'; rech.value = etat.ruesTexte; rech.setAttribute('aria-label', 'Chercher une rue');
-    rech.addEventListener('input', function () { etat.ruesTexte = rech.value; rendreLignesRues(); });
-    var lab = el('label', 'case-inline'); var cb = el('input'); cb.type = 'checkbox'; cb.checked = etat.ruesNonTerminees;
-    cb.addEventListener('change', function () { etat.ruesNonTerminees = cb.checked; rendreLignesRues(); });
-    lab.appendChild(cb); lab.appendChild(document.createTextNode(' Seulement les rues non terminées'));
-    outils.appendChild(rech); outils.appendChild(lab); contenu.appendChild(outils);
-    contenu.appendChild(el('p', 'aide', 'La rue vient de l\'adresse OpenStreetMap du bâtiment ou de celle trouvée à l\'ouverture de sa fiche. ' +
-      'Les maisons dont la rue est inconnue sont regroupées à part : le total d\'une rue ne compte que les maisons dont la rue est connue.'));
-    var zone = el('div', 'zone-rues'); contenu.appendChild(zone);
-
-    function rendreLignesRues() {
-      zone.innerHTML = '';
-      var rs = Stats.rues(items).filter(function (r) {
-        return (!etat.ruesNonTerminees || !r.termine) && (!etat.ruesTexte || r.nom.toLowerCase().indexOf(etat.ruesTexte.toLowerCase()) >= 0);
+  // ---------- Secteurs et rues ----------
+  function barre(nom, pct, droite, c) {
+    var li = el('li'); var h = el('div', 'haut'); h.appendChild(el('strong', null, nom)); h.appendChild(el('span', null, droite)); li.appendChild(h);
+    var j = el('div', 'jauge'); var s = el('span'); s.style.setProperty('--c', c || 'var(--primaire)'); j.appendChild(s); li.appendChild(j);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { s.style.width = pct + '%'; }); });
+    return li;
+  }
+  function blocSecteurs() {
+    var b = bloc('s4', 'Secteurs', 'pentagon');
+    if (etat.demo) {
+      var ul0 = el('ul', 'liste-barres');
+      Object.keys(Stats.nomsDemo).forEach(function (id) {
+        var m = tous.filter(function (e) { return e.secteurs.indexOf(id) >= 0; }), f = m.filter(function (e) { return e.statut !== 'aucun'; }).length;
+        ul0.appendChild(barre(Stats.nomsDemo[id], Math.round(100 * f / m.length), Math.round(100 * f / m.length) + ' %', 'var(--st-contact)'));
       });
-      rs.sort(function (a, b) {
-        if (!a.nom !== !b.nom) return a.nom ? -1 : 1;                       // rue inconnue en dernier
-        if (a.termine !== b.termine) return a.termine ? 1 : -1;            // non terminées d'abord
-        return (b.total - b.faits) - (a.total - a.faits) || a.nom.localeCompare(b.nom, 'fr');
-      });
-      var nonTerm = rs.filter(function (r) { return r.nom && !r.termine; }).length;
-      zone.appendChild(el('p', 'aide', rs.length + ' rue(s) — ' + nonTerm + ' non terminée(s).'));
-      if (!rs.length) { zone.appendChild(el('p', 'vide', 'Aucune rue ne correspond.')); return; }
-      var tb = el('table', 'tableau');
-      var h = el('tr'); ['Rue', 'Avancement', 'Faites', 'Reste'].forEach(function (x) { h.appendChild(el('th', null, x)); });
-      var th = el('thead'); th.appendChild(h); tb.appendChild(th);
-      var body = el('tbody');
-      rs.forEach(function (r) {
-        var tr = el('tr'); tr.appendChild(el('th', 'rue', r.nom || 'Rue inconnue'));
-        var td = el('td'); var pb = el('div', 'prog'); pb.setAttribute('role', 'img'); pb.setAttribute('aria-label', r.pct + ' % faits');
-        var f = el('span'); f.style.width = r.pct + '%'; pb.appendChild(f); td.appendChild(pb); td.appendChild(el('span', 'prog-pct', r.pct + ' %'));
-        tr.appendChild(td); tr.appendChild(el('td', 'num', r.faits + ' / ' + r.total)); tr.appendChild(el('td', 'num', r.total - r.faits));
-        body.appendChild(tr);
-      });
-      tb.appendChild(body); zone.appendChild(tb);
+      b.corps.appendChild(ul0); return b.bloc;
     }
-    rendreLignesRues();
+    var ss = Secteurs.liste();
+    if (!ss.length) { b.corps.appendChild(videBloc('Dessinez un secteur pour suivre sa couverture.', 'pentagon')); return b.bloc; }
+    var ul = el('ul', 'liste-barres');
+    ss.slice(0, 6).forEach(function (s) { var st = Secteurs.stats(s.id); ul.appendChild(barre(s.nom, st.pct || 0, st.pct === null ? 'non chargé' : st.pct + ' % · ' + nombre(st.aFaire) + ' à faire', s.couleur)); });
+    b.corps.appendChild(ul);
+    return b.bloc;
+  }
+  function blocRues() {
+    var b = bloc('s4', 'Rues à terminer', 'route');
+    // L'avancement d'une rue est une couverture : on compte toutes les maisons (toute période)
+    var rs = Stats.rues(Stats.filtrer(tous, 0, etat.secteur)).filter(function (r) { return r.nom && !r.termine; })
+      .sort(function (a, c) { return (c.total - c.faits) - (a.total - a.faits) || a.nom.localeCompare(c.nom, 'fr'); });
+    if (!rs.length) { b.corps.appendChild(videBloc('Aucune rue en cours. La rue est connue grâce à l\'adresse des maisons.', 'route')); return b.bloc; }
+    var ul = el('ul', 'liste-barres');
+    rs.slice(0, 6).forEach(function (r) { ul.appendChild(barre(r.nom, r.pct, r.faits + '/' + r.total + ' · reste ' + (r.total - r.faits), 'var(--st-prospectus)')); });
+    b.corps.appendChild(ul);
+    if (rs.length > 6) b.corps.appendChild(el('p', 'sous-titre', '+ ' + (rs.length - 6) + ' autre' + (rs.length - 6 > 1 ? 's' : '') + ' rue' + (rs.length - 6 > 1 ? 's' : '')));
+    return b.bloc;
   }
 
-  // ---------- Aller voir une maison sur la carte ----------
-
+  // ---------- Journal ----------
   function aller(e) {
-    if (etat.demo) { alerter('Données de démonstration : ces maisons n\'existent pas sur la carte.'); return; }
-    if (e.lat === null) { alerter('Position inconnue pour cette maison.'); return; }
-    fermer();
-    Outils.setMode('consulter');
+    if (etat.demo) { Notif.alerter('Données d\'exemple : ces maisons n\'existent pas sur la carte.'); return; }
+    if (e.lat === null) { Notif.alerter('Position inconnue pour cette maison.'); return; }
+    Coquille.allerVue('carte'); Outils.setMode('consulter');
     CarteImmo.getMap().setView([e.lat, e.lon], 19, { animate: false });
     if (DataImmo.batiment(e.id) || e.id.indexOf('man/') === 0) Panneau.ouvrir(e.id);
   }
-
-  function celluleAdresse(e) {
-    var td = el('td'); var b = el('button', 'btn-lien-ligne', e.adresse || e.rue || e.id);
-    b.type = 'button'; b.title = 'Voir sur la carte'; b.addEventListener('click', function () { aller(e); });
-    td.appendChild(b); return td;
-  }
-  function celluleStatut(e) {
-    var td = el('td'); td.appendChild(pastille(e.statut)); td.appendChild(document.createTextNode(Statuts.parId(e.statut).label)); return td;
-  }
-
-  // ---------- Liste filtrable et triable ----------
-
-  function liste() {
-    var outils = el('div', 'barre-outils');
-    var sel = el('select'); sel.setAttribute('aria-label', 'Filtrer par statut');
+  function blocJournal() {
+    var exp = Ui.bouton([icone('download', 'ic-sm'), 'Exporter (CSV)'], 'btn btn-sm', null, { id: 'stats-export' });
+    var b = bloc('s12', 'Journal des passages', 'list', exp);
+    var barreJ = el('div', 'barre-journal');
+    var rch = el('label', 'saisie-icone'); rch.appendChild(icone('search', 'ic-sm'));
+    var inp = el('input', 'saisie'); inp.type = 'search'; inp.placeholder = 'Nom, adresse, note…'; inp.value = etat.recherche; inp.setAttribute('aria-label', 'Rechercher dans le journal'); inp.id = 'journal-recherche';
+    rch.appendChild(inp); barreJ.appendChild(rch);
+    var sel = el('select', 'saisie'); sel.setAttribute('aria-label', 'Filtrer par statut'); sel.id = 'journal-statut';
     var o0 = el('option', null, 'Tous les statuts'); o0.value = ''; sel.appendChild(o0);
-    Statuts.LISTE.filter(function (s) { return s.id !== 'aucun'; }).forEach(function (s) { var o = el('option', null, s.label); o.value = s.id; sel.appendChild(o); });
-    sel.value = etat.filtreStatut;
-    sel.addEventListener('change', function () { etat.filtreStatut = sel.value; etat.lignes = LIGNES_MAX; rendre(); });
-    var rech = el('input'); rech.type = 'search'; rech.placeholder = 'Chercher dans les notes et adresses…'; rech.value = etat.recherche; rech.setAttribute('aria-label', 'Chercher dans les notes et adresses');
-    rech.addEventListener('input', function () { etat.recherche = rech.value; etat.lignes = LIGNES_MAX; rendre(); });
-    var exp = el('button', 'btn-petit', '⬇ Exporter la sélection (CSV)'); exp.type = 'button'; exp.id = 'stats-export';
-    exp.disabled = etat.demo; if (etat.demo) exp.title = 'Indisponible avec les données de démonstration';
-    outils.appendChild(sel); outils.appendChild(rech); outils.appendChild(exp); contenu.appendChild(outils);
-    var zone = el('div'); contenu.appendChild(zone);
+    Statuts.ORDRE_CHOIX.filter(function (x) { return x !== 'aucun'; }).forEach(function (sid) { var o = el('option', null, Statuts.parId(sid).label); o.value = sid; sel.appendChild(o); });
+    sel.value = etat.filtreStatut; barreJ.appendChild(sel);
+    b.corps.appendChild(barreJ);
+    var zone = el('div'); b.corps.appendChild(zone);
     var selection = [];
-
+    exp.disabled = etat.demo;
     exp.addEventListener('click', function () { Echange.exporterCsv(selection.map(function (e) { return e.id; })); });
+    inp.addEventListener('input', function () { etat.recherche = inp.value; etat.lignes = LIGNES_MAX; rendre(); });
+    sel.addEventListener('change', function () { etat.filtreStatut = sel.value; etat.lignes = LIGNES_MAX; rendre(); });
 
     function rendre() {
       zone.innerHTML = '';
       var q = etat.recherche.trim().toLowerCase();
       selection = items.filter(function (e) {
-        return e.statut !== 'aucun' && (!etat.filtreStatut || e.statut === etat.filtreStatut) &&
-          (!q || (e.note + ' ' + e.adresse + ' ' + e.rue).toLowerCase().indexOf(q) >= 0);
+        return e.statut !== 'aucun' && (!etat.filtreStatut || e.statut === etat.filtreStatut) && (!q || (e.nom + ' ' + e.note + ' ' + e.adresse + ' ' + e.rue + ' ' + e.tel).toLowerCase().indexOf(q) >= 0);
       });
-      var cle = { date: function (e) { return e.date; }, adresse: function (e) { return (e.rue + ' ' + e.adresse).toLowerCase(); },
-        statut: function (e) { return Statuts.parId(e.statut).label; }, secteur: function (e) { return e.secteurs.map(nomSecteur).join(', '); } }[etat.tri];
-      selection.sort(function (a, b) {
-        var x = cle(a), y = cle(b);
-        return (x < y ? -1 : x > y ? 1 : 0) * etat.ordre;
-      });
+      var cle = { date: function (e) { return e.date; }, adresse: function (e) { return (e.nom || e.adresse || '').toLowerCase(); }, statut: function (e) { return Statuts.parId(e.statut).label; } }[etat.tri];
+      selection.sort(function (a, c) { var x = cle(a), y = cle(c); return (x < y ? -1 : x > y ? 1 : 0) * etat.ordre; });
       exp.disabled = etat.demo || !selection.length;
-      zone.appendChild(el('p', 'aide', nombre(selection.length) + ' maison(s).'));
-      if (!selection.length) { zone.appendChild(el('p', 'vide', 'Aucune maison ne correspond.')); return; }
-      var tb = el('table', 'tableau liste');
+      if (!selection.length) { zone.appendChild(videBloc('Aucun passage ne correspond.', 'inbox')); return; }
+      var tw = el('div', 'table-defilante'); var tb = el('table', 'tableau liste');
       var h = el('tr');
-      [['date', 'Date'], ['adresse', 'Adresse'], ['statut', 'Statut'], ['secteur', 'Secteur'], [null, 'Note'], [null, 'Log.']].forEach(function (c) {
+      [['date', 'Date'], ['adresse', 'Maison'], ['statut', 'Statut'], [null, 'Secteur'], [null, 'Note']].forEach(function (c) {
         var th = el('th'); th.scope = 'col';
         if (c[0]) {
-          var b = el('button', 'tri', c[1] + (etat.tri === c[0] ? (etat.ordre > 0 ? ' ▲' : ' ▼') : '')); b.type = 'button';
+          var bt = Ui.bouton([c[1], etat.tri === c[0] ? icone(etat.ordre > 0 ? 'chevron-down' : 'chevron-down', 'ic-sm') : null], 'tri');
+          if (etat.tri === c[0] && etat.ordre > 0) bt.querySelector('.ic').style.transform = 'rotate(180deg)';
           th.setAttribute('aria-sort', etat.tri === c[0] ? (etat.ordre > 0 ? 'ascending' : 'descending') : 'none');
-          b.addEventListener('click', function () { if (etat.tri === c[0]) etat.ordre = -etat.ordre; else { etat.tri = c[0]; etat.ordre = c[0] === 'date' ? -1 : 1; } rendre(); });
-          th.appendChild(b);
+          bt.addEventListener('click', function () { if (etat.tri === c[0]) etat.ordre = -etat.ordre; else { etat.tri = c[0]; etat.ordre = c[0] === 'date' ? -1 : 1; } rendre(); });
+          th.appendChild(bt);
         } else th.textContent = c[1];
         h.appendChild(th);
       });
       var thead = el('thead'); thead.appendChild(h); tb.appendChild(thead);
       var body = el('tbody');
       selection.slice(0, etat.lignes).forEach(function (e) {
-        var tr = el('tr'); tr.appendChild(el('td', 'date', formatDate(e.date))); tr.appendChild(celluleAdresse(e)); tr.appendChild(celluleStatut(e));
-        tr.appendChild(el('td', null, e.secteurs.map(nomSecteur).filter(Boolean).join(', '))); tr.appendChild(el('td', 'note', e.note)); tr.appendChild(el('td', 'num', e.logements || ''));
+        var tr = el('tr');
+        tr.appendChild(el('td', 'date', formatDate(e.date)));
+        var td = el('td'); var lien = Ui.bouton(e.nom || e.adresse || e.rue || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Voir sur la carte' });
+        td.appendChild(lien); if (e.nom && e.adresse) { td.appendChild(document.createElement('br')); td.appendChild(el('span', 'sous-titre', e.adresse)); }
+        tr.appendChild(td);
+        var ts = el('td'); ts.appendChild(Ui.etiquetteStatut(Statuts.parId(e.statut))); tr.appendChild(ts);
+        tr.appendChild(el('td', null, e.secteurs.map(nomSecteur).filter(Boolean).join(', ')));
+        tr.appendChild(el('td', 'note', e.note));
         body.appendChild(tr);
       });
-      tb.appendChild(body); zone.appendChild(tb);
-      if (selection.length > etat.lignes) {
-        var plus = el('button', 'btn-petit', 'Afficher plus (' + (selection.length - etat.lignes) + ' restantes)'); plus.type = 'button';
-        plus.addEventListener('click', function () { etat.lignes += LIGNES_MAX; rendre(); }); zone.appendChild(plus);
-      }
+      tb.appendChild(body); tw.appendChild(tb); zone.appendChild(tw);
+      var pied = el('div', 'pied-journal'); pied.appendChild(el('span', null, nombre(selection.length) + ' passage' + (selection.length > 1 ? 's' : '')));
+      if (selection.length > etat.lignes) pied.appendChild(Ui.bouton('Afficher plus', 'btn btn-sm', function () { etat.lignes += LIGNES_MAX; rendre(); }, { id: 'journal-plus' }));
+      zone.appendChild(pied);
     }
     rendre();
+    return b.bloc;
   }
 
-  // ---------- À rappeler ----------
-
-  function rappels() {
-    var rs = items.filter(function (e) { return e.statut === 'rappeler'; })
-      .sort(function (a, b) { return (a.date || '9') < (b.date || '9') ? -1 : 1; }); // le plus ancien d'abord
-    contenu.appendChild(el('p', 'aide', nombre(rs.length) + ' maison(s) à rappeler, de la plus ancienne à la plus récente.'));
-    if (!rs.length) { contenu.appendChild(el('p', 'vide', 'Rien à rappeler pour ces filtres.')); return; }
-    var tb = el('table', 'tableau liste'); var h = el('tr');
-    ['Depuis', 'Date', 'Adresse', 'Note'].forEach(function (x) { h.appendChild(el('th', null, x)); });
-    var thead = el('thead'); thead.appendChild(h); tb.appendChild(thead);
-    var body = el('tbody'), auj = Stats.aujourdhui();
-    rs.forEach(function (e) {
-      var tr = el('tr');
-      var jours = e.date ? Math.round((auj - Stats.dateDepuisJour(e.date.slice(0, 10))) / 86400000) : null;
-      tr.appendChild(el('td', 'num', jours === null ? '' : (jours === 0 ? 'aujourd\'hui' : jours + ' j')));
-      tr.appendChild(el('td', 'date', formatDate(e.date))); tr.appendChild(celluleAdresse(e)); tr.appendChild(el('td', 'note', e.note));
-      body.appendChild(tr);
-    });
-    tb.appendChild(body); contenu.appendChild(tb);
+  // ---------- Assemblage ----------
+  function dessiner() {
+    if (!ouvert) return;
+    var y = racine.scrollTop;
+    charger();
+    tip.hidden = true;
+    racine.innerHTML = '';
+    var c = el('div', 'tableau-contenu');
+    c.appendChild(entete());
+    if (etat.demo) {
+      var bd = el('div', 'bandeau-demo'); bd.id = 'stats-demo-bandeau'; bd.appendChild(icone('info', 'ic-sm'));
+      bd.appendChild(document.createTextNode('Données d\'exemple : fictives, jamais enregistrées. Vos vraies données ne sont pas modifiées.'));
+      c.appendChild(bd);
+    }
+    c.appendChild(indicateurs());
+    var g = el('div', 'grille-tableau');
+    g.appendChild(blocObjectif());
+    g.appendChild(blocActivite());
+    g.appendChild(blocRepartition());
+    g.appendChild(blocSecteurs());
+    g.appendChild(blocRues());
+    g.appendChild(blocJournal());
+    Array.prototype.forEach.call(g.children, function (x, i) { x.style.animationDelay = (150 + i * 50) + 'ms'; });
+    c.appendChild(g);
+    racine.appendChild(c);
+    racine.scrollTop = y;
   }
 
-  // ---------- Initialisation ----------
-
-  function init(fnAlerter) {
-    alerter = fnAlerter;
-    racine = document.getElementById('stats'); contenu = document.getElementById('stats-contenu'); tip = document.getElementById('stats-tip');
-    var onglets = document.getElementById('stats-onglets');
-    ONGLETS.forEach(function (o) {
-      var b = el('button', 'onglet', o[1]); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.onglet = o[0]; b.id = 'onglet-' + o[0];
-      b.addEventListener('click', function () { etat.onglet = o[0]; dessiner(); });
-      b.addEventListener('keydown', function (e) {
-        var i = ONGLETS.map(function (x) { return x[0]; }).indexOf(etat.onglet);
-        if (e.key === 'ArrowRight') i = (i + 1) % ONGLETS.length; else if (e.key === 'ArrowLeft') i = (i + ONGLETS.length - 1) % ONGLETS.length; else return;
-        etat.onglet = ONGLETS[i][0]; dessiner(); document.getElementById('onglet-' + etat.onglet).focus();
-      });
-      onglets.appendChild(b);
-    });
-    document.getElementById('btn-stats').addEventListener('click', function () { if (racine.hidden) ouvrir(); else fermer(); });
-    document.getElementById('stats-fermer').addEventListener('click', fermer);
-    document.getElementById('stats-periode').addEventListener('change', function (e) { etat.periode = +e.target.value; etat.lignes = LIGNES_MAX; dessiner(); });
-    document.getElementById('stats-secteur').addEventListener('change', function (e) { etat.secteur = e.target.value; etat.lignes = LIGNES_MAX; dessiner(); });
-    document.getElementById('stats-demo').addEventListener('change', function (e) { etat.demo = e.target.checked; etat.secteur = ''; majSecteurs(); dessiner(); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !racine.hidden) { e.stopPropagation(); fermer(); } }, true);
-    var timer; window.addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(function () { if (!racine.hidden && etat.onglet === 'evolution') dessiner(); }, 200); });
+  function definirObjectif(n, silencieux) {
+    objectif = Math.max(1, Math.min(5000, n | 0));
+    if (!silencieux) { Store.kvSet('objectif', objectif); Notif.afficher('Objectif : ' + objectif + ' maisons par semaine.', { type: 'succes', cle: 'objectif' }); }
   }
 
-  return { init: init, ouvrir: ouvrir, fermer: fermer };
+  function ouvrir() { ouvert = true; racine.scrollTop = 0; dessiner(); }
+  function fermer() { ouvert = false; if (tip) tip.hidden = true; }
+
+  function init() {
+    racine = document.getElementById('tableau'); tip = document.getElementById('info-graphique');
+    var t = null;
+    window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { if (ouvert) dessiner(); }, 250); });
+    Statuts.surChangement(function () { if (ouvert) { clearTimeout(t); t = setTimeout(dessiner, 150); } });
+  }
+
+  return { init: init, ouvrir: ouvrir, fermer: fermer, definirObjectif: definirObjectif };
 })();

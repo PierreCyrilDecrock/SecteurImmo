@@ -14,7 +14,13 @@ var CarteImmo = (function () {
   var evidence = {};        // id -> true : maisons à faire mises en évidence (secteurs)
   var ecouteursElements = []; // appelés quand des bâtiments sont ajoutés / retirés
   var surClic = null;       // fonction(id) appelée au clic sur un bâtiment
-  var fonds = {}, fondActif = 'Plan OpenStreetMap', surPrefs = null;
+  var fonds = {}, fondActif = 'epure', surPrefs = null, ecouteursFond = [];
+  // Fonds proposés : « épuré » = plan OSM désaturé (les statuts ressortent), plan OSM, plan IGN, photo aérienne IGN
+  var FONDS = [
+    { id: 'epure', nom: 'Épuré', couche: 'osm' }, { id: 'plan', nom: 'Plan', couche: 'osm' },
+    { id: 'ign', nom: 'Plan IGN', couche: 'ign' }, { id: 'photo', nom: 'Satellite', couche: 'photo' }
+  ];
+  var ANCIENS_NOMS = { 'Plan OpenStreetMap': 'plan', 'Plan IGN': 'ign', 'Vue aérienne IGN': 'photo' }; // préférences d'avant la refonte
 
   // ---------- Fonds de carte ----------
 
@@ -37,10 +43,11 @@ var CarteImmo = (function () {
 
   function init(alerter) {
     map = L.map('map', {
-      zoomControl: true, maxZoom: 19,
+      zoomControl: false, maxZoom: 19, zoomSnap: 0.5,
       // Rendu Canvas (rapide avec des milliers de bâtiments) ; zone de clic élargie au doigt
       renderer: L.canvas({ tolerance: L.Browser.touch ? 10 : 3 })
     }).setView([46.6, 2.5], 6); // France
+    map.attributionControl.setPrefix('<a href="https://leafletjs.com" title="Bibliothèque de cartes">Leaflet</a>');
 
     var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -54,19 +61,11 @@ var CarteImmo = (function () {
     });
     surveillerErreurs(osm, 'OpenStreetMap', alerter);
     surveillerErreurs(ignPlan, 'Plan IGN', alerter);
-    surveillerErreurs(ignOrtho, 'Vue aérienne IGN', alerter);
+    surveillerErreurs(ignOrtho, 'Satellite IGN', alerter);
 
+    fonds = { osm: osm, ign: ignPlan, photo: ignOrtho };
     osm.addTo(map);
-    fonds = { 'Plan OpenStreetMap': osm, 'Plan IGN': ignPlan, 'Vue aérienne IGN': ignOrtho };
-    var ctrlFonds = L.control.layers(fonds, null, { position: 'topright', collapsed: true }).addTo(map);
-    // Une fois déplié, le menu des fonds passerait sous la barre d'outils (qui est hors de la carte) :
-    // on masque alors temporairement les outils (classe sur <body>).
-    new MutationObserver(function () {
-      document.body.classList.toggle('fonds-ouverts', ctrlFonds.getContainer().classList.contains('leaflet-control-layers-expanded'));
-    }).observe(ctrlFonds.getContainer(), { attributes: true, attributeFilter: ['class'] });
-    map.on('baselayerchange', function (e) { fondActif = e.name; prefsChangees(); });
     map.on('moveend', prefsChangees);
-    L.control.scale({ imperial: false }).addTo(map);
 
     groupe = L.layerGroup().addTo(map);
     groupeIcones = L.layerGroup().addTo(map);
@@ -84,11 +83,22 @@ var CarteImmo = (function () {
     surPrefs({ lat: c.lat, lon: c.lng, zoom: map.getZoom(), fond: fondActif });
   }
   function definirSurPrefs(fn) { surPrefs = fn; }
+  function infoFond(id) { return FONDS.filter(function (f) { return f.id === id; })[0]; }
+  function setFond(id) {
+    id = ANCIENS_NOMS[id] || id;
+    var nouveau = infoFond(id), ancien = infoFond(fondActif);
+    if (!nouveau) return;
+    if (ancien.couche !== nouveau.couche) { map.removeLayer(fonds[ancien.couche]); fonds[nouveau.couche].addTo(map); }
+    fondActif = id;
+    var c = map.getContainer();
+    c.classList.toggle('fond-epure', id === 'epure');
+    c.classList.toggle('fond-photo', id === 'photo');
+    ecouteursFond.forEach(function (cb) { cb(id); });
+    prefsChangees();
+  }
   function appliquerPrefs(p) {
     if (!p) return;
-    if (p.fond && fonds[p.fond] && p.fond !== fondActif) {
-      map.removeLayer(fonds[fondActif]); fonds[p.fond].addTo(map); fondActif = p.fond;
-    }
+    if (p.fond) setFond(p.fond);
     if (typeof p.lat === 'number' && typeof p.lon === 'number' && p.zoom) map.setView([p.lat, p.lon], p.zoom, { animate: false });
   }
 
@@ -96,20 +106,25 @@ var CarteImmo = (function () {
 
   function styleDe(id) {
     var st = Statuts.parId(Statuts.statutDe(id));
-    if (selection[id]) return { color: '#ffd600', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.8, opacity: 1 };
-    if (evidence[id]) return { color: '#ff1744', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.75, opacity: 1 };
-    return {
-      color: st.contour, weight: st.id === 'aucun' ? 1 : 2.5, dashArray: st.tirets,
-      fillColor: st.couleur, fillOpacity: st.id === 'aucun' ? 0.45 : 0.7, opacity: 1
-    };
+    if (selection[id]) return { color: '#f59e0b', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.85, opacity: 1 };
+    if (evidence[id]) return { color: '#db2777', weight: 3.5, dashArray: null, fillColor: st.couleur, fillOpacity: st.id === 'aucun' ? 0.5 : 0.8, opacity: 1 };
+    if (st.id === 'aucun') return { color: '#64748b', weight: 1, dashArray: null, fillColor: '#94a3b8', fillOpacity: 0.32, opacity: 0.9 };
+    return { color: st.contour, weight: 2, dashArray: st.tirets, fillColor: st.couleur, fillOpacity: 0.82, opacity: 1 };
   }
 
-  function libelle(id, el) {
+  // Contenu de l'infobulle, calculé à l'ouverture (texte inséré sans HTML)
+  function infobulle(id) {
+    var el = elements[id];
+    if (!el) return '';
     var f = el.manuel ? null : DataImmo.batiment(id);
-    var type = el.manuel ? 'Point ajouté' : DataImmo.typeBatiment(f.properties);
-    var adr = el.manuel ? '' : DataImmo.adresse(f.properties);
-    adr = adr || Statuts.adresseDe(id);
-    return type + ' – ' + (adr || 'adresse inconnue') + ' – ' + Statuts.parId(Statuts.statutDe(id)).label;
+    var rec = Statuts.get(id) || {};
+    var adr = (f && DataImmo.adresse(f.properties)) || Statuts.adresseDe(id);
+    var d = document.createElement('div');
+    d.textContent = rec.nom || adr || (el.manuel ? 'Maison ajoutée' : DataImmo.typeBatiment(f.properties));
+    var sm = document.createElement('small');
+    sm.textContent = Statuts.parId(Statuts.statutDe(id)).label + (rec.nom && adr ? ' · ' + adr : '');
+    d.appendChild(sm);
+    return d;
   }
 
   // Met à jour couleur, infobulle, visibilité (filtre) et icône d'un bâtiment
@@ -119,7 +134,7 @@ var CarteImmo = (function () {
     var statut = Statuts.statutDe(id);
     var visible = !masques[statut];
     el.couche.setStyle(styleDe(id));
-    if (el.couche.setTooltipContent) el.couche.setTooltipContent(libelle(id, el));
+    if (el.couche.isTooltipOpen && el.couche.isTooltipOpen()) el.couche.getTooltip().update();
     if (visible && !el.visible) { groupe.addLayer(el.couche); }
     if (!visible && el.visible) { groupe.removeLayer(el.couche); }
     el.visible = visible;
@@ -127,18 +142,20 @@ var CarteImmo = (function () {
     // L'icône n'existe que si le statut en a une, qu'on est assez zoomé et que la maison est dans la vue
     // (des milliers d'éléments DOM d'icône rendraient la carte lente).
     el.iconeSt = visible ? Statuts.parId(statut) : null;
-    if (el.iconeSt && !el.iconeSt.icone) el.iconeSt = null;
+    if (el.iconeSt && el.iconeSt.id === 'aucun') el.iconeSt = null;   // pas d'icône pour les maisons non faites
     if (el.icone) { groupeIcones.removeLayer(el.icone); el.icone = null; }
-    majIconeEl(el);
+    majIconeEl(el, true);
   }
 
   var zoneIcones = null;   // zone visible (agrandie) pour laquelle on crée les icônes
-  function majIconeEl(el) {
+  var ICONES_MAX = 350;    // au-delà (quartier très dense), pas d'icônes : la carte resterait lente et illisible
+  // anime : petite animation d'apparition (seulement quand le statut vient de changer, pas en déplaçant la carte)
+  function majIconeEl(el, anime) {
     var voulue = !!el.iconeSt && zoneIcones && map.getZoom() >= ZOOM_ICONES && zoneIcones.contains(L.latLng(el.centre[0], el.centre[1]));
     if (voulue && !el.icone) {
       el.icone = L.marker(el.centre, {
         interactive: false, keyboard: false,
-        icon: L.divIcon({ className: 'icone-statut', html: el.iconeSt.icone, iconSize: [22, 22] })
+        icon: L.divIcon({ className: 'badge-statut', iconSize: [24, 24], html: '<span class="' + (anime ? 'pop' : '') + '" style="--c:var(--st-' + el.iconeSt.id + ')">' + Ui.htmlIcone(el.iconeSt.icone) + '</span>' })
       });
       groupeIcones.addLayer(el.icone);
     } else if (!voulue && el.icone) {
@@ -148,13 +165,23 @@ var CarteImmo = (function () {
 
   // Appelée après chaque déplacement / zoom
   function majIcones() {
-    zoneIcones = map.getZoom() >= ZOOM_ICONES ? map.getBounds().pad(0.3) : null;
+    var zone = map.getZoom() >= ZOOM_ICONES ? map.getBounds().pad(0.25) : null;
+    if (zone) {
+      var n = 0;
+      Object.keys(elements).some(function (id) {
+        var el = elements[id];
+        if (el.iconeSt && zone.contains(L.latLng(el.centre[0], el.centre[1]))) n++;
+        return n > ICONES_MAX;
+      });
+      if (n > ICONES_MAX) zone = null;
+    }
+    zoneIcones = zone;
     Object.keys(elements).forEach(function (id) { majIconeEl(elements[id]); });
   }
 
   function enregistrer(id, couche, centre, manuel) {
     elements[id] = { couche: couche, centre: centre, icone: null, manuel: !!manuel, visible: false };
-    couche.bindTooltip('', { sticky: true });
+    couche.bindTooltip(function () { return infobulle(id); }, { sticky: true, className: 'info-maison', direction: 'top', offset: [0, -8] });
     couche.on('click', function (e) {
       L.DomEvent.stopPropagation(e);
       if (surClic) surClic(id, e.latlng);
@@ -254,15 +281,33 @@ var CarteImmo = (function () {
     return r;
   }
 
+  // Onde colorée à l'endroit d'une maison (retour visuel quand on lui donne un statut)
+  function onde(id, statutId) {
+    var el = elements[id];
+    if (!el || Ui.reduitMouvement()) return;
+    var p = map.latLngToContainerPoint(el.centre);
+    var o = document.createElement('span');
+    o.className = 'onde';
+    o.style.left = p.x + 'px'; o.style.top = p.y + 'px';
+    o.style.setProperty('--c', 'var(--st-' + (statutId || Statuts.statutDe(id)) + ')');
+    map.getContainer().appendChild(o);
+    setTimeout(function () { o.remove(); }, 700);
+  }
+
   // Recentre la carte sur un résultat de recherche et pose un repère
   function aller(resultat) {
-    map.setView([resultat.lat, resultat.lon], resultat.zoom || 16);
+    var z = resultat.zoom || 16;
+    if (Ui.reduitMouvement()) map.setView([resultat.lat, resultat.lon], z); else map.flyTo([resultat.lat, resultat.lon], z, { duration: 1.1 });
     if (marqueurRecherche) map.removeLayer(marqueurRecherche);
-    marqueurRecherche = L.marker([resultat.lat, resultat.lon], { title: resultat.label }).addTo(map);
+    marqueurRecherche = L.marker([resultat.lat, resultat.lon], {
+      title: resultat.label, keyboard: false, interactive: false,
+      icon: L.divIcon({ className: 'repere-recherche', iconSize: [36, 44], iconAnchor: [18, 42], html: '<span>' + Ui.htmlIcone('map-pin') + '</span>' })
+    }).addTo(map);
   }
 
   return {
-    init: init, aller: aller, getMap: function () { return map; },
+    init: init, aller: aller, getMap: function () { return map; }, onde: onde,
+    fonds: function () { return FONDS; }, fond: function () { return fondActif; }, setFond: setFond, surFond: function (cb) { ecouteursFond.push(cb); },
     afficherBatiments: afficherBatiments, afficherManuel: afficherManuel, retirer: retirer,
     definirSurClic: definirSurClic, filtrer: filtrer, centre: centre, total: total,
     definirSurPrefs: definirSurPrefs, appliquerPrefs: appliquerPrefs, synchroniserManuels: synchroniserManuels,

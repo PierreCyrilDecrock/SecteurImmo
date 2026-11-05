@@ -12,7 +12,7 @@ var Store = (function () {
 
   var NOM_BASE = 'secteurimmo';
   var VERSION_BASE = 1;
-  var SCHEMA = 2;            // version du format des données (export compris)
+  var SCHEMA = 3;            // version du format des données (export compris)
   var db = null;
   var attente = null;        // écritures en attente : { magasin: { cle: valeur|null } }
   var timer = null;
@@ -49,6 +49,7 @@ var Store = (function () {
   // Adapte d'anciennes données au schéma courant (aucune migration nécessaire pour le moment)
   function migrer(donnees, schemaLu) {
     // Schéma 1 -> 2 : ajout des secteurs (absents = liste vide, déjà géré par les valeurs par défaut)
+    // Schéma 2 -> 3 : fiches enrichies (nom, téléphone, historique des passages) : champs facultatifs, rien à convertir
     // if (schemaLu < 3) { … }  ← à compléter quand le format changera
     return donnees;
   }
@@ -61,8 +62,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} } };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });

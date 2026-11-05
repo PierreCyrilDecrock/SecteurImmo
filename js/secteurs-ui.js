@@ -1,131 +1,105 @@
 /*
- * secteurs-ui.js – Volet « Secteurs » : liste, avancement, actions.
+ * secteurs-ui.js – Panneau « Secteurs » : cartes avec anneau d'avancement, répartition par statut,
+ * maisons restant à faire, maison suivante, chargement des maisons, renommage, suppression.
  * Expose l'objet global SecteursUi.
  */
 var SecteursUi = (function () {
   'use strict';
 
-  var volet, liste, msg, btnOuvrir, caseCouleur, idRenommer = null, alerter = function () {};
+  var liste, caseCouleur, idRenommer = null, visible = false, animer = false;
+  var el = Ui.el, icone = Ui.icone;
 
-  function el(tag, classe, texte) {
-    var e = document.createElement(tag);
-    if (classe) e.className = classe;
-    if (texte !== undefined) e.textContent = texte;
-    return e;
-  }
+  function voirSurCarte() { if (Coquille.telephone()) Coquille.fermerTiroir(); }
 
-  function bouton(texte, titre, fn, classe) {
-    var b = el('button', classe || 'btn-petit', texte);
-    b.type = 'button'; b.title = titre; b.setAttribute('aria-label', titre);
-    b.addEventListener('click', fn);
-    return b;
-  }
-
-  function ouvrir() {
-    Ui.fermerVolets(); Panneau.fermer();
-    volet.hidden = false; btnOuvrir.setAttribute('aria-pressed', 'true');
-    dessiner();
-  }
-  function fermer() { volet.hidden = true; btnOuvrir.setAttribute('aria-pressed', 'false'); }
-
-  // Barre d'avancement : un segment coloré par statut
-  function barre(st) {
-    var b = el('div', 's-barre');
-    b.setAttribute('role', 'img');
-    b.setAttribute('aria-label', st.faits + ' faits sur ' + st.total);
-    if (st.total) Statuts.LISTE.forEach(function (s) {
-      var n = st.parStatut[s.id];
-      if (!n) return;
-      var seg = el('span'); seg.style.width = (100 * n / st.total) + '%'; seg.style.background = s.couleur;
-      seg.title = s.label + ' : ' + n;
-      b.appendChild(seg);
-    });
-    return b;
-  }
-
-  function ligne(s) {
+  function carte(s, i) {
     var st = Secteurs.stats(s.id);
-    var li = el('li'); li.dataset.id = s.id;
+    var c = el('article', 'carte-secteur' + (Secteurs.trousActifs() === s.id ? ' trous-actifs' : '') + (animer ? ' entree' : ''));
+    c.dataset.id = s.id;
+    if (animer) c.style.animationDelay = Math.min(i, 8) * 40 + 'ms';
 
-    var tete = el('div', 's-tete');
-    var pastille = el('span', 'pastille'); pastille.style.background = s.couleur; pastille.style.borderColor = s.couleur;
-    tete.appendChild(pastille);
+    var tete = el('div', 'cs-tete');
+    tete.appendChild(Ui.anneau(st.pct || 0, 46, 5, s.couleur, st.pct === null ? '—' : st.pct + '%', animer));
+    var tx = el('div', 'cs-texte');
     if (idRenommer === s.id) {
-      var inp = el('input', 's-nom-input'); inp.type = 'text'; inp.value = s.nom; inp.maxLength = 80; inp.setAttribute('aria-label', 'Nom du secteur');
-      var fini = function () { idRenommer = null; Secteurs.renommer(s.id, inp.value); };
-      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') fini(); else if (e.key === 'Escape') { idRenommer = null; dessiner(); } });
-      inp.addEventListener('blur', function () { if (idRenommer === s.id) fini(); });
-      tete.appendChild(inp);
-      setTimeout(function () { inp.focus(); inp.select(); }, 0);
+      var inp = el('input', 'saisie cs-nom-saisie'); inp.type = 'text'; inp.value = s.nom; inp.maxLength = 80; inp.setAttribute('aria-label', 'Nom du secteur');
+      var fini = function () { if (idRenommer !== s.id) return; idRenommer = null; Secteurs.renommer(s.id, inp.value); };
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') fini(); else if (e.key === 'Escape') { e.stopPropagation(); idRenommer = null; dessiner(); } });
+      inp.addEventListener('blur', fini);
+      tx.appendChild(inp);
+      setTimeout(function () { inp.focus(); inp.select(); }, 30);
     } else {
-      var nom = el('button', 's-nom', s.nom); nom.type = 'button'; nom.title = 'Voir ce secteur sur la carte';
-      nom.addEventListener('click', function () { Secteurs.voir(s.id); });
-      tete.appendChild(nom);
+      var nom = Ui.bouton(s.nom, 'cs-nom', function () { Secteurs.voir(s.id); voirSurCarte(); }, { title: 'Voir ce secteur sur la carte' });
+      tx.appendChild(nom);
     }
-    tete.appendChild(el('span', 's-pct', st.pct === null ? '—' : st.pct + ' %'));
-    li.appendChild(tete);
-    li.appendChild(barre(st));
+    var ch = Secteurs.etatChargement(), enCharge = ch && ch.id === s.id;
+    tx.appendChild(el('div', 'sous-titre', enCharge ? 'Chargement des maisons : zone ' + Math.min(ch.fait + 1, ch.total) + ' sur ' + ch.total + '…'
+      : st.total ? Ui.nombre(st.total) + ' maisons · ' + Ui.nombre(st.faits) + ' faites · ' + Ui.nombre(st.aFaire) + ' à faire' : 'Aucune maison chargée'));
+    tete.appendChild(tx);
+    tete.appendChild(Ui.bouton(icone('pencil', 'ic-sm'), 'btn btn-sm btn-icone btn-fantome', function () { idRenommer = s.id; dessiner(); }, { 'aria-label': 'Renommer', 'data-tip': 'Renommer', 'data-action': 'renommer' }));
+    tete.appendChild(Ui.bouton(icone('trash-2', 'ic-sm'), 'btn btn-sm btn-icone btn-fantome', function () {
+      Ui.confirmer({ titre: 'Supprimer « ' + s.nom + ' » ?', message: 'Le secteur sera supprimé. Les maisons et leurs statuts ne sont pas touchés.', bouton: 'Supprimer', danger: true })
+        .then(function (ok) { if (ok) { Secteurs.supprimer(s.id); Notif.afficher('Secteur supprimé.', { type: 'succes' }); } });
+    }, { 'aria-label': 'Supprimer ce secteur', 'data-tip': 'Supprimer', 'data-action': 'supprimer' }));
+    c.appendChild(tete);
 
-    var ch = Secteurs.etatChargement();
-    var enCharge = ch && ch.id === s.id;
-    li.appendChild(el('div', 's-texte', st.total
-      ? st.total + ' bâtiment(s) · ' + st.faits + ' fait(s) · ' + st.aFaire + ' à faire'
-      : (enCharge ? '' : 'Aucun bâtiment chargé dans ce secteur : utilisez « Charger les bâtiments ».')));
-    if (enCharge) li.appendChild(el('div', 's-texte', 'Chargement des bâtiments : zone ' + Math.min(ch.fait + 1, ch.total) + '/' + ch.total + '…'));
+    // Répartition par statut
+    var j = el('div', 'jauge multi'); j.setAttribute('role', 'img'); j.setAttribute('aria-label', st.faits + ' maisons faites sur ' + st.total);
+    if (st.total) Statuts.ORDRE_GRAPHIQUE.forEach(function (sid) {
+      var n = st.parStatut[sid]; if (!n) return;
+      var seg = el('span'); seg.style.flexBasis = (100 * n / st.total) + '%'; seg.style.background = 'var(--st-' + sid + ')'; seg.title = Statuts.parId(sid).label + ' : ' + n;
+      j.appendChild(seg);
+    });
+    c.appendChild(j);
 
-    var actions = el('div', 's-actions');
-    var trouOn = Secteurs.trousActifs() === s.id;
-    var bTrous = bouton('🔍 Non faits', 'Mettre en évidence les maisons restant à faire', function () { Secteurs.basculerTrous(s.id); }, 'btn-petit');
-    bTrous.setAttribute('aria-pressed', trouOn ? 'true' : 'false'); bTrous.dataset.action = 'trous';
-    var bSuivant = bouton('⏭ Suivant', 'Aller à la prochaine maison à faire', function () {
+    var a = el('div', 'cs-actions');
+    var bTrous = Ui.bouton([icone('target', 'ic-sm'), 'À faire'], 'btn btn-sm', function () { Secteurs.basculerTrous(s.id); voirSurCarte(); },
+      { 'aria-pressed': Secteurs.trousActifs() === s.id ? 'true' : 'false', 'data-action': 'trous', 'data-tip': 'Mettre en évidence les maisons à faire' });
+    var bSuiv = Ui.bouton([icone('skip-forward', 'ic-sm'), 'Suivante'], 'btn btn-sm', function () {
       var id = Secteurs.suivant(s.id);
-      if (!id) { alerter('Toutes les maisons de ce secteur sont faites 🎉'); return; }
-      Panneau.ouvrir(id);
-    }); bSuivant.dataset.action = 'suivant';
-    var bCharger = bouton('📥 Charger les bâtiments', 'Télécharger les bâtiments de tout le secteur', function () {
+      if (!id) { Notif.afficher(st.total ? 'Toutes les maisons de ce secteur sont faites, bravo !' : 'Chargez d\'abord les maisons du secteur.', { type: st.total ? 'succes' : 'info' }); return; }
+      Coquille.fermerTiroir(); Panneau.ouvrir(id);
+    }, { 'data-action': 'suivant', 'data-tip': 'Aller à la maison à faire la plus proche' });
+    var bCharger = Ui.bouton([icone(enCharge ? 'loader-circle' : 'download', 'ic-sm' + (enCharge ? ' rotation' : '')), st.total ? 'Compléter' : 'Charger les maisons'], 'btn btn-sm' + (st.total ? '' : ' btn-primaire'), function () {
       Secteurs.chargerBatiments(s.id).then(function (n) {
-        alerter(n + ' nouveau(x) bâtiment(s) chargé(s) pour « ' + s.nom + ' ».');
-      }).catch(function (e) { alerter(e.message || 'Chargement impossible.'); });
-    }); bCharger.dataset.action = 'charger'; bCharger.disabled = !!ch;
-    var bRen = bouton('✎', 'Renommer', function () { idRenommer = s.id; dessiner(); });
-    var bSup = bouton('🗑', 'Supprimer ce secteur', function () {
-      if (window.confirm('Supprimer le secteur « ' + s.nom + ' » ?\n(Les maisons et leurs statuts ne sont pas touchés.)')) Secteurs.supprimer(s.id);
-    }, 'btn-petit btn-danger-petit');
-    bSup.dataset.action = 'supprimer';
-    [bTrous, bSuivant, bCharger, bRen, bSup].forEach(function (b) { actions.appendChild(b); });
-    li.appendChild(actions);
-    return li;
+        Notif.afficher(n ? n + ' maison' + (n > 1 ? 's' : '') + ' ajoutée' + (n > 1 ? 's' : '') + ' dans « ' + s.nom + ' »' : 'Secteur déjà complet.', { type: 'succes' });
+      }).catch(function (e) { Notif.afficher(e.message || 'Chargement impossible.', { type: 'erreur' }); });
+    }, { 'data-action': 'charger' });
+    bCharger.disabled = !!ch;
+    a.appendChild(bTrous); a.appendChild(bSuiv); a.appendChild(bCharger);
+    c.appendChild(a);
+    return c;
   }
 
   function dessiner() {
-    if (volet.hidden) return;
-    // Ne pas reconstruire pendant une saisie (perte du curseur)
+    if (!visible) return;
     var actif = document.activeElement;
-    if (actif && actif.classList && actif.classList.contains('s-nom-input') && idRenommer) return;
+    if (actif && actif.classList && actif.classList.contains('cs-nom-saisie') && idRenommer) return;
     liste.innerHTML = '';
     var tous = Secteurs.liste();
-    if (!tous.length) liste.appendChild(el('li', 'vide', 'Aucun secteur. Dessinez-en un pour suivre votre couverture.'));
-    tous.forEach(function (s) { liste.appendChild(ligne(s)); });
+    if (!tous.length) {
+      var v = el('div', 'vide');
+      var m = el('div', 'medaillon'); m.appendChild(icone('pentagon', 'ic-lg')); v.appendChild(m);
+      v.appendChild(el('strong', null, 'Aucun secteur pour l\'instant'));
+      v.appendChild(el('span', null, 'Un secteur regroupe les rues que vous prospectez : vous suivez ainsi votre couverture.'));
+      liste.appendChild(v);
+    }
+    tous.forEach(function (s, i) { liste.appendChild(carte(s, i)); });
     caseCouleur.checked = !!Secteurs.options().colorer;
   }
 
-  function init(fnAlerter) {
-    alerter = fnAlerter;
-    volet = document.getElementById('secteurs');
+  function ouvrir() { visible = true; animer = true; dessiner(); animer = false; }
+  function ouvrirPourRenommer(id) { idRenommer = id; Coquille.ouvrirTiroir('secteurs'); }
+
+  function init() {
     liste = document.getElementById('secteurs-liste');
-    msg = document.getElementById('secteurs-msg');
-    btnOuvrir = document.getElementById('btn-secteurs');
     caseCouleur = document.getElementById('secteurs-couleur');
-    btnOuvrir.addEventListener('click', function () { if (volet.hidden) ouvrir(); else fermer(); });
+    Coquille.enregistrer('secteurs', { ouvrir: ouvrir, fermer: function () { visible = false; } });
     document.getElementById('secteurs-nouveau').addEventListener('click', function () {
-      fermer(); Secteurs.demarrerDessin();
+      Coquille.fermerTiroir(); Secteurs.demarrerDessin();
     });
     caseCouleur.addEventListener('change', function () { Secteurs.definirOption('colorer', caseCouleur.checked); });
     Secteurs.surMaj(dessiner);
   }
 
-  // Ouvre le volet et passe directement le nouveau secteur en saisie du nom
-  function ouvrirPourRenommer(id) { idRenommer = id; ouvrir(); }
-
-  return { init: init, ouvrir: ouvrir, fermer: fermer, ouvrirPourRenommer: ouvrirPourRenommer };
+  return { init: init, ouvrir: function () { Coquille.ouvrirTiroir('secteurs'); }, fermer: function () { Coquille.fermerTiroir(); }, ouvrirPourRenommer: ouvrirPourRenommer };
 })();

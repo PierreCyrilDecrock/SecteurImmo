@@ -1,0 +1,144 @@
+/*
+ * tokens.css – Fondations du design : police, couleurs (thèmes clair / sombre), rayons, ombres,
+ * mouvements, et styles de base. Le thème est posé sur <html data-theme="clair|sombre"> par js/theme.js.
+ */
+
+/* Inter (variable, auto-hébergée : aucune requête vers un CDN) – licence SIL OFL, voir vendor/inter/LICENSE */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(../vendor/inter/inter-latin-wght-normal.woff2) format('woff2-variations'), url(../vendor/inter/inter-latin-wght-normal.woff2) format('woff2');
+}
+
+:root {
+  color-scheme: light;
+  --police: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Surfaces */
+  --fond-app: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --surface-survol: #f1f5f9;
+  --verre: rgba(255, 255, 255, .82);
+  --verre-fort: rgba(255, 255, 255, .94);
+  --voile: rgba(15, 23, 42, .38);
+
+  /* Texte */
+  --texte: #0f172a;
+  --texte-2: #475569;
+  --texte-3: #64748b;
+  --texte-inverse: #ffffff;
+
+  /* Bordures */
+  --bord: rgba(15, 23, 42, .09);
+  --bord-fort: rgba(15, 23, 42, .16);
+
+  /* Action principale : encre (sobre, professionnelle) ; accent ponctuel bleu */
+  --primaire: #0f172a;
+  --primaire-survol: #1e293b;
+  --sur-primaire: #ffffff;
+  --accent: #2563eb;
+  --accent-doux: rgba(37, 99, 235, .1);
+  --focus: #2563eb;
+
+  /* États */
+  --succes: #059669; --succes-doux: rgba(5, 150, 105, .1);
+  --alerte: #d97706; --alerte-doux: rgba(217, 119, 6, .12);
+  --danger: #dc2626; --danger-doux: rgba(220, 38, 38, .1);
+
+  /* Statuts (palette catégorielle validée, voir js/statuts.js) */
+  --st-aucun: #9aa5b1; --st-prospectus: #2a78d6; --st-contact: #1baf7a;
+  --st-absent: #eb6834; --st-refus: #e34948; --st-rappeler: #6250d6;
+
+  /* Graphiques */
+  --grille: #e5e7eb; --axe: #64748b;
+
+  /* Forme */
+  --r-xs: 6px; --r-sm: 8px; --r: 12px; --r-lg: 16px; --r-xl: 22px; --r-plein: 999px;
+  --ombre-xs: 0 1px 2px rgba(15, 23, 42, .06);
+  --ombre-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 6px rgba(15, 23, 42, .06);
+  --ombre: 0 2px 4px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .10);
+  --ombre-lg: 0 4px 8px rgba(15, 23, 42, .05), 0 24px 56px rgba(15, 23, 42, .18);
+  --flou: saturate(1.6) blur(18px);
+
+  /* Mouvement */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-ressort: cubic-bezier(.34, 1.4, .64, 1);
+  --t-rapide: 140ms; --t: 220ms; --t-lent: 380ms;
+
+  /* Gabarit */
+  --rail: 76px;
+  --tiroir: 380px;
+  --fiche: 400px;
+  --barre-onglets: 64px;
+}
+
+:root[data-theme="sombre"] {
+  color-scheme: dark;
+  --fond-app: #0b0f17;
+  --surface: #121826;
+  --surface-2: #161d2d;
+  --surface-3: #1c2436;
+  --surface-survol: #1f2940;
+  --verre: rgba(18, 24, 38, .80);
+  --verre-fort: rgba(18, 24, 38, .94);
+  --voile: rgba(0, 0, 0, .55);
+  --texte: #e8edf5;
+  --texte-2: #b4bfd0;
+  --texte-3: #8794aa;
+  --texte-inverse: #0b0f17;
+  --bord: rgba(255, 255, 255, .08);
+  --bord-fort: rgba(255, 255, 255, .16);
+  --primaire: #f1f5f9;
+  --primaire-survol: #ffffff;
+  --sur-primaire: #0b0f17;
+  --accent: #60a5fa;
+  --accent-doux: rgba(96, 165, 250, .14);
+  --focus: #60a5fa;
+  --succes: #34d399; --succes-doux: rgba(52, 211, 153, .12);
+  --alerte: #fbbf24; --alerte-doux: rgba(251, 191, 36, .12);
+  --danger: #f87171; --danger-doux: rgba(248, 113, 113, .12);
+  --st-prospectus: #3987e5; --st-contact: #199e70; --st-absent: #d95926; --st-refus: #e66767; --st-rappeler: #9085e9;
+  --grille: #263045; --axe: #94a3b8;
+  --ombre-xs: 0 1px 2px rgba(0, 0, 0, .4);
+  --ombre-sm: 0 1px 2px rgba(0, 0, 0, .35), 0 2px 8px rgba(0, 0, 0, .25);
+  --ombre: 0 2px 6px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .35);
+  --ombre-lg: 0 6px 12px rgba(0, 0, 0, .35), 0 28px 64px rgba(0, 0, 0, .5);
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--police); font-size: 14px; line-height: 1.45; color: var(--texte); background: var(--fond-app);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-feature-settings: 'cv11', 'ss01';
+  overflow: hidden; -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, h4 { margin: 0; letter-spacing: -.011em; }
+p { margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+::selection { background: var(--accent-doux); }
+
+/* Icônes (sprite Lucide) */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+.ic-lg { width: 22px; height: 22px; }
+.ic-xl { width: 28px; height: 28px; }
+
+/* Texte réservé aux lecteurs d'écran */
+.sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Barres de défilement discrètes */
+* { scrollbar-width: thin; scrollbar-color: var(--bord-fort) transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}

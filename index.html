@@ -1,195 +1,287 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="clair">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Les tuiles OpenStreetMap exigent un en-tête Referer : on garde l'origine -->
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>SecteurImmo – Suivi de prospection</title>
-  <meta name="description" content="Suivi de prospection immobilière sur carte : cochez les maisons où vous avez prospecté.">
-  <meta name="theme-color" content="#1565c0">
+  <title>SecteurImmo – Prospection immobilière</title>
+  <meta name="description" content="Pilotez votre prospection terrain : cochez les maisons visitées, suivez vos secteurs, vos rappels et vos résultats.">
+  <meta name="theme-color" content="#0f172a">
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="SecteurImmo">
+  <!-- Thème posé avant l'affichage (évite un flash clair en mode sombre) -->
+  <script>
+    try {
+      var t = localStorage.getItem('secteurimmo-theme') || 'systeme';
+      var s = t === 'sombre' || (t === 'systeme' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', s ? 'sombre' : 'clair');
+    } catch (e) { /* stockage indisponible : thème clair */ }
+  </script>
+  <link rel="preload" href="vendor/inter/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/composants.css">
+  <link rel="stylesheet" href="css/coquille.css">
+  <link rel="stylesheet" href="css/carte.css">
+  <link rel="stylesheet" href="css/panneaux.css">
+  <link rel="stylesheet" href="css/tableau.css">
 </head>
 <body>
-<main>
-  <!-- Carte plein écran -->
-  <div id="map" aria-label="Carte de prospection"></div>
+<div class="app">
 
-  <!-- Barre de recherche (ville ou adresse) -->
-  <div id="recherche" role="search">
-    <form id="recherche-form" autocomplete="off">
-      <input id="recherche-input" type="search" placeholder="Rechercher une ville ou une adresse…"
-             aria-label="Rechercher une ville ou une adresse" aria-controls="suggestions" autocomplete="off">
-      <button type="submit" aria-label="Lancer la recherche">🔍</button>
-    </form>
-    <ul id="suggestions" role="listbox" hidden></ul>
-  </div>
-
-  <!-- Barre d'outils : modes de travail -->
-  <div id="outils" role="toolbar" aria-label="Outils de prospection">
-    <button type="button" data-mode="consulter" aria-pressed="true" title="Consulter : un clic ouvre la fiche">👆<span>Consulter</span></button>
-    <button type="button" data-mode="tournee" aria-pressed="false" title="Tournée rapide : un clic applique le statut">⚡<span>Tournée</span></button>
-    <button type="button" data-mode="selection" aria-pressed="false" title="Sélection multiple : rectangle ou lasso">⬚<span>Sélection</span></button>
-    <button type="button" data-mode="ajouter" aria-pressed="false" title="Ajouter une maison manquante">➕<span>Ajouter</span></button>
-    <button type="button" id="btn-annuler" title="Annuler la dernière action (Ctrl+Z)" disabled>↶<span>Annuler</span></button>
-    <button type="button" id="btn-legende" aria-pressed="false" title="Légende et filtres">🎨<span>Légende</span></button>
-  </div>
-  <div id="contexte" hidden></div>
-  <div id="legende" hidden>
-    <strong>Légende</strong> <small>(décochez pour masquer)</small>
-  </div>
-
-  <!-- Statistiques -->
-  <button type="button" id="btn-stats" aria-pressed="false" title="Statistiques de prospection" aria-label="Statistiques de prospection">📊</button>
-  <section id="stats" hidden aria-label="Statistiques de prospection">
-    <header class="stats-entete">
-      <h2>Statistiques</h2>
-      <label class="case-inline"><input type="checkbox" id="stats-demo"> Données de démonstration</label>
-      <button type="button" id="stats-fermer" aria-label="Fermer les statistiques">✕</button>
-    </header>
-    <div id="stats-demo-bandeau" hidden>Données de démonstration : elles sont fictives, jamais enregistrées, et vos vraies données ne sont pas modifiées.</div>
-    <div class="stats-filtres">
-      <label>Période
-        <select id="stats-periode">
-          <option value="0">Tout</option><option value="7">7 derniers jours</option>
-          <option value="30">30 derniers jours</option><option value="90">90 derniers jours</option>
-        </select>
-      </label>
-      <label>Secteur <select id="stats-secteur"></select></label>
+  <!-- ================= Navigation principale ================= -->
+  <nav class="rail" aria-label="Navigation principale">
+    <a class="logo" href="#" aria-label="SecteurImmo" data-tip="SecteurImmo" data-tip-pos="droite"><svg class="ic"><use href="vendor/lucide/icons.svg#map-pinned"/></svg></a>
+    <button type="button" class="rail-item" data-nav="carte" aria-current="page"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#map"/></svg></span>Carte</button>
+    <button type="button" class="rail-item" data-nav="secteurs" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#pentagon"/></svg></span>Secteurs</button>
+    <button type="button" class="rail-item" data-nav="tableau"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#layout-dashboard"/></svg></span>Bilan</button>
+    <button type="button" class="rail-item" data-nav="rappels" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#bell"/></svg></span>Rappels<span class="badge" id="badge-rappels" hidden>0</span></button>
+    <button type="button" class="rail-item" data-nav="donnees" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#database"/></svg></span>Données<span class="point" id="point-donnees" hidden></span></button>
+    <button type="button" class="rail-item rail-plus" id="btn-plus" aria-expanded="false" aria-haspopup="menu"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#menu"/></svg></span>Plus</button>
+    <div class="rail-espace"></div>
+    <div class="rail-bas">
+      <button type="button" class="rail-item" data-nav="aide" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#circle-help"/></svg></span>Aide</button>
+      <button type="button" class="rail-item" id="btn-theme"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#monitor"/></svg></span><span class="libelle-theme">Auto</span></button>
     </div>
-    <div id="stats-onglets" role="tablist" aria-label="Rubriques"></div>
-    <div id="stats-contenu" role="tabpanel"></div>
-  </section>
-  <div id="stats-tip" role="tooltip" hidden></div>
+  </nav>
 
-  <!-- Secteurs de prospection -->
-  <button type="button" id="btn-secteurs" aria-pressed="false" title="Secteurs : couverture et avancement" aria-label="Secteurs : couverture et avancement">🗺</button>
-  <div id="secteurs" hidden>
-    <strong>Secteurs</strong>
-    <p class="aide">Un secteur = une zone dessinée sur la carte. L'avancement compte les bâtiments chargés qu'il contient : chargez-les d'abord.</p>
-    <button type="button" id="secteurs-nouveau" class="btn-statut">➕ Dessiner un secteur</button>
-    <label class="case"><input type="checkbox" id="secteurs-couleur"> Colorer les secteurs selon leur avancement</label>
-    <ul id="secteurs-liste"></ul>
-  </div>
+  <!-- ================= Scène : carte et tableau de bord ================= -->
+  <main class="scene" id="scene">
+    <div id="map" aria-label="Carte de prospection" class="fond-epure"></div>
+    <div class="progression" id="progression" aria-hidden="true"></div>
 
-  <!-- Sauvegarde, export, import -->
-  <button type="button" id="btn-donnees" aria-pressed="false" title="Mes données : sauvegarde, export, import" aria-label="Mes données : sauvegarde, export, import">💾</button>
-  <div id="donnees" hidden>
-    <strong>Mes données</strong>
-    <p id="donnees-etat"></p>
-    <div class="actions-donnees">
-      <button type="button" id="btn-export-json">Exporter (JSON)</button>
-      <button type="button" id="btn-export-csv">Exporter (CSV)</button>
-      <button type="button" id="btn-import">Importer…</button>
-      <button type="button" id="btn-lier" hidden>Lier un fichier de sauvegarde…</button>
+    <!-- Recherche (ouvre la palette de commandes) -->
+    <div class="surcouche barre-haut">
+      <button type="button" class="recherche-pilule verre" id="btn-recherche" aria-haspopup="dialog">
+        <svg class="ic"><use href="vendor/lucide/icons.svg#search"/></svg>
+        <span class="texte"><span class="txt-long">Rechercher une adresse, une ville, une action…</span><span class="txt-court">Adresse, ville, action…</span></span>
+        <span class="kbd" id="kbd-palette">Ctrl K</span>
+      </button>
     </div>
-    <input type="file" id="fichier-import" accept=".json,application/json" hidden>
-    <p id="lie-etat" hidden></p>
-    <p class="rgpd">🔒 Vos données restent uniquement sur cet ordinateur, dans ce navigateur : elles ne sont envoyées à aucun serveur.
-      Elles peuvent contenir des données personnelles (notes sur des habitants) : protégez vos exports.</p>
-    <button type="button" id="btn-effacer" class="btn-lien">Effacer toutes mes données</button>
-  </div>
-  <dialog id="dlg-import" aria-label="Importer une sauvegarde"></dialog>
-  <div id="rappel" role="alert" hidden>
-    <span>💾 Pas de sauvegarde (export) depuis plus de 7 jours.</span>
-    <button type="button" id="rappel-export">Exporter maintenant</button>
-    <button type="button" id="rappel-plus-tard" class="btn-lien">Plus tard</button>
-  </div>
 
-  <!-- Fiche du bâtiment sélectionné -->
-  <aside id="panneau" hidden aria-label="Fiche du bâtiment">
-    <button id="panneau-fermer" type="button" aria-label="Fermer la fiche">✕</button>
-    <div id="panneau-contenu"></div>
-  </aside>
-
-  <!-- Chargement des bâtiments de la zone visible -->
-  <div id="batiments">
-    <button id="btn-batiments" type="button" disabled>Charger les bâtiments de cette zone</button>
-    <p id="batiments-info" role="status" aria-live="polite"></p>
-  </div>
-
-  <!-- Ma position et aide, au-dessus du bouton de chargement -->
-  <button type="button" id="btn-position" aria-pressed="false" class="bouton-coin coin-droit">📍</button>
-  <button type="button" id="btn-aide" class="bouton-coin coin-gauche" title="Aide" aria-label="Aide">❓</button>
-
-  <dialog id="dlg-aide" aria-labelledby="aide-titre">
-    <button type="button" id="aide-fermer" aria-label="Fermer l'aide">✕</button>
-    <h2 id="aide-titre">Aide – SecteurImmo</h2>
-
-    <h3>Démarrer en 5 étapes</h3>
-    <ol>
-      <li>Cherchez votre ville ou votre rue (barre de recherche) et zoomez jusqu'aux maisons (niveau 16 minimum).</li>
-      <li>Cliquez sur <strong>« Charger les bâtiments de cette zone »</strong> : les maisons apparaissent en gris.</li>
-      <li>Facultatif : <strong>🗺 Secteurs</strong> → dessinez un secteur autour de vos rues, puis chargez ses bâtiments pour suivre le pourcentage couvert.</li>
-      <li>Sur le terrain : <strong>⚡ Tournée</strong>, choisissez un statut (ex. « Prospectus déposé ») puis touchez chaque maison faite.</li>
-      <li><strong>📊 Statistiques</strong> pour suivre l'avancement, et <strong>💾</strong> pour exporter régulièrement vos données.</li>
-    </ol>
-
-    <h3>Les outils</h3>
-    <ul>
-      <li><strong>👆 Consulter</strong> : toucher une maison ouvre sa fiche (statut, date, logements, note).</li>
-      <li><strong>⚡ Tournée</strong> : un statut est actif, chaque maison touchée le reçoit.</li>
-      <li><strong>⬚ Sélection</strong> : glissez un rectangle ou un lasso pour appliquer un statut à plusieurs maisons (la carte ne bouge pas dans ce mode).</li>
-      <li><strong>➕ Ajouter</strong> : place un point pour une maison absente d'OpenStreetMap.</li>
-      <li><strong>↶ Annuler</strong> (ou Ctrl/Cmd + Z) annule les derniers changements. <strong>🎨 Légende</strong> : compteurs et filtre par statut.</li>
-    </ul>
-
-    <h3>Sur le terrain</h3>
-    <ul>
-      <li><strong>📍 Ma position</strong> : point bleu suivi en direct (la carte vous suit ; déplacez la carte pour arrêter de la recentrer, recliquez pour la recentrer, ou cliquez pendant le suivi pour l'arrêter). L'écran reste allumé pendant le suivi si votre navigateur le permet. La position n'est ni enregistrée ni envoyée.</li>
-      <li><strong>⏭ Suivant</strong> (dans Secteurs) amène à la maison restant à faire la plus proche de vous.</li>
-      <li><strong>Installer l'application</strong> : menu du navigateur → « Installer l'application » / « Ajouter à l'écran d'accueil ». Elle démarre ensuite sans connexion avec vos données ; seule la carte (les tuiles) demande du réseau.</li>
-      <li>Hors ligne, les maisons déjà chargées restent affichables et cochables ; il faut du réseau pour charger de nouveaux bâtiments.</li>
-    </ul>
-
-    <h3>Clavier et accessibilité</h3>
-    <ul>
-      <li>Touches fléchées pour déplacer la carte, + / − pour zoomer, <kbd>Échap</kbd> pour revenir au mode Consulter ou fermer un volet.</li>
-      <li>Les maisons se sélectionnent à la souris ou au doigt. Au clavier : <strong>Secteurs → ⏭ Suivant</strong> ou <strong>Statistiques → Liste</strong> (le nom de la maison ouvre sa fiche).</li>
-      <li>Chaque statut a une couleur, un style de contour et une icône. Les thèmes clair et sombre du système sont respectés.</li>
-    </ul>
-
-    <h3>Vos données et leurs limites</h3>
-    <ul>
-      <li>Tout reste dans <strong>votre navigateur</strong>, sur cet appareil : aucun serveur, aucun compte. Les notes peuvent contenir des données personnelles : protégez vos exports. Exportez régulièrement (💾) : vider les données du navigateur efface tout.</li>
-      <li>Les maisons viennent d'OpenStreetMap : certaines manquent, certains bâtiments n'ont pas d'adresse, et un immeuble est un seul bâtiment. Utilisez « ➕ Ajouter » et le champ « logements ».</li>
-    </ul>
-
-    <div class="actions-dialogue">
-      <button type="button" id="aide-installer" hidden>📲 Installer l'application</button>
+    <!-- Contrôles de la carte -->
+    <div class="controles-carte">
+      <div class="groupe-ctrl verre">
+        <button type="button" id="btn-fonds" aria-label="Fond de carte" aria-expanded="false" data-tip="Fond de carte" data-tip-pos="gauche"><svg class="ic"><use href="vendor/lucide/icons.svg#layers"/></svg></button>
+      </div>
+      <div class="popover-fonds verre" id="popover-fonds" hidden role="group" aria-label="Fonds de carte"></div>
+      <div class="groupe-ctrl verre" id="grp-zoom">
+        <button type="button" id="btn-zoom-plus" aria-label="Zoomer" data-tip="Zoomer" data-tip-pos="gauche"><svg class="ic"><use href="vendor/lucide/icons.svg#plus"/></svg></button>
+        <button type="button" id="btn-zoom-moins" aria-label="Dézoomer" data-tip="Dézoomer" data-tip-pos="gauche"><svg class="ic"><use href="vendor/lucide/icons.svg#minus"/></svg></button>
+      </div>
+      <div class="groupe-ctrl verre">
+        <button type="button" id="btn-position" aria-pressed="false" aria-label="Ma position" data-tip="Ma position" data-tip-pos="gauche"><svg class="ic"><use href="vendor/lucide/icons.svg#locate"/></svg></button>
+      </div>
     </div>
-    <p class="aide">SecteurImmo – application 100 % locale (HTML / CSS / JavaScript). Cartes © OpenStreetMap, © IGN.</p>
-  </dialog>
 
-  <!-- Messages courts (erreurs réseau, infos) -->
-  <div id="toast" role="status" aria-live="polite" hidden></div>
+    <!-- Légende et filtres -->
+    <section class="legende verre" id="legende" aria-label="Légende et filtres"></section>
 
-</main>
+    <!-- Bas de la carte : chargement, contexte du mode, dock d'outils -->
+    <div class="surcouche pile-bas">
+      <button type="button" class="pastille-charger verre" id="pastille-charger" hidden></button>
+      <div class="contexte verre" id="contexte" hidden></div>
+      <div class="dock verre" id="dock" role="toolbar" aria-label="Outils de prospection">
+        <button type="button" class="outil" data-mode="consulter" aria-pressed="true" aria-label="Consulter" data-tip="Consulter · V"><svg class="ic"><use href="vendor/lucide/icons.svg#mouse-pointer-2"/></svg></button>
+        <button type="button" class="outil" data-mode="tournee" aria-pressed="false" aria-label="Tournée rapide" data-tip="Tournée rapide · T"><svg class="ic"><use href="vendor/lucide/icons.svg#zap"/></svg></button>
+        <button type="button" class="outil" data-mode="selection" aria-pressed="false" aria-label="Sélection multiple" data-tip="Sélection multiple · S"><svg class="ic"><use href="vendor/lucide/icons.svg#square-dashed"/></svg></button>
+        <button type="button" class="outil" data-mode="ajouter" aria-pressed="false" aria-label="Ajouter une maison" data-tip="Ajouter une maison · A"><svg class="ic"><use href="vendor/lucide/icons.svg#map-pin-plus"/></svg></button>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" class="outil" id="btn-annuler" aria-label="Annuler" data-tip="Annuler · Ctrl Z" disabled><svg class="ic"><use href="vendor/lucide/icons.svg#undo-2"/></svg></button>
+      </div>
+    </div>
 
-  <!-- Scripts classiques (pas de modules ES) : l'ordre compte -->
-  <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="js/pwa.js"></script>
-  <script src="js/geocode.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/statuts.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/map.js"></script>
-  <script src="js/panneau.js"></script>
-  <script src="js/position.js"></script>
-  <script src="js/secteurs.js"></script>
-  <script src="js/secteurs-ui.js"></script>
-  <script src="js/stats.js"></script>
-  <script src="js/stats-ui.js"></script>
-  <script src="js/outils.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/echange.js"></script>
-  <script src="js/aide.js"></script>
-  <script src="js/app.js"></script>
+    <!-- Premier lancement -->
+    <div class="surcouche accueil" id="accueil-carte" hidden>
+     <div class="accueil-carte verre">
+      <div class="medaillon"><svg class="ic ic-xl"><use href="vendor/lucide/icons.svg#map-pinned"/></svg></div>
+      <h2>Où prospectez-vous ?</h2>
+      <p>Cherchez votre ville ou votre quartier, zoomez sur les rues, puis chargez les maisons à prospecter.</p>
+      <button type="button" class="btn btn-primaire btn-lg" id="accueil-chercher"><svg class="ic"><use href="vendor/lucide/icons.svg#search"/></svg>Rechercher une adresse</button>
+     </div>
+    </div>
+
+    <!-- Tableau de bord -->
+    <section class="vue-tableau" id="tableau" hidden aria-labelledby="titre-tableau"></section>
+
+    <div class="voile" id="voile"></div>
+
+    <!-- ================= Tiroir latéral ================= -->
+    <aside class="tiroir" id="tiroir" aria-labelledby="tiroir-titre" inert>
+      <div class="poignee" data-glisse="tiroir"></div>
+      <div class="tiroir-tete">
+        <h2 id="tiroir-titre">Secteurs</h2>
+        <span id="tiroir-actions"></span>
+        <button type="button" class="btn btn-fantome btn-icone" id="tiroir-fermer" aria-label="Fermer le panneau"><svg class="ic"><use href="vendor/lucide/icons.svg#x"/></svg></button>
+      </div>
+      <div class="tiroir-corps">
+
+        <!-- Secteurs -->
+        <div class="tiroir-section" data-section="secteurs" hidden>
+          <p class="sous-titre" style="margin-bottom:14px">Dessinez vos zones de prospection et suivez leur couverture, maison par maison.</p>
+          <button type="button" class="btn btn-primaire btn-plein" id="secteurs-nouveau" style="margin-bottom:12px"><svg class="ic"><use href="vendor/lucide/icons.svg#plus"/></svg>Nouveau secteur</button>
+          <label class="interrupteur" style="margin-bottom:14px"><input type="checkbox" id="secteurs-couleur"><span class="piste"></span>Colorer les secteurs selon leur avancement</label>
+          <div class="liste-cartes" id="secteurs-liste"></div>
+        </div>
+
+        <!-- Rappels -->
+        <div class="tiroir-section" data-section="rappels" hidden>
+          <p class="sous-titre" style="margin-bottom:14px">Les personnes à recontacter, de la plus ancienne demande à la plus récente.</p>
+          <div class="liste-cartes" id="rappels-liste"></div>
+        </div>
+
+        <!-- Données -->
+        <div class="tiroir-section" data-section="donnees" hidden>
+          <div class="pile">
+            <div class="alerte-carte" id="rappel" role="alert" hidden>
+              <svg class="ic"><use href="vendor/lucide/icons.svg#triangle-alert"/></svg>
+              <div><strong>Pensez à sauvegarder</strong><br>Aucun export depuis plus de 7 jours.
+                <div class="actions"><button type="button" class="btn btn-sm btn-primaire" id="rappel-export">Exporter maintenant</button><button type="button" class="btn btn-sm btn-fantome" id="rappel-plus-tard">Plus tard</button></div>
+              </div>
+            </div>
+            <div class="etat-sauvegarde" id="etat-sauvegarde">
+              <span class="rond"><svg class="ic"><use href="vendor/lucide/icons.svg#shield-check"/></svg></span>
+              <div><strong id="etat-sauvegarde-titre">Sauvegarde automatique active</strong><p id="donnees-etat"></p></div>
+            </div>
+            <div class="chiffres-donnees" id="chiffres-donnees"></div>
+
+            <h3 class="etiquette" style="margin-top:6px">Exporter</h3>
+            <button type="button" class="ligne-action" id="btn-export-json"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#file-json"/></svg></span><span class="txt"><strong>Sauvegarde complète</strong><span>Fichier JSON, à réimporter sur un autre appareil</span></span><svg class="ic"><use href="vendor/lucide/icons.svg#download"/></svg></button>
+            <button type="button" class="ligne-action" id="btn-export-csv"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#file-spreadsheet"/></svg></span><span class="txt"><strong>Tableur (CSV)</strong><span>S'ouvre directement dans Excel</span></span><svg class="ic"><use href="vendor/lucide/icons.svg#download"/></svg></button>
+
+            <h3 class="etiquette" style="margin-top:6px">Importer</h3>
+            <button type="button" class="depot" id="btn-import"><svg class="ic ic-lg"><use href="vendor/lucide/icons.svg#upload"/></svg><strong>Déposez un fichier de sauvegarde</strong><span>ou cliquez pour le choisir (.json)</span></button>
+            <input type="file" id="fichier-import" accept=".json,application/json" hidden>
+
+            <div id="bloc-lier" hidden>
+              <h3 class="etiquette" style="margin:6px 0 12px">Fichier de sauvegarde lié</h3>
+              <button type="button" class="ligne-action" id="btn-lier"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#link"/></svg></span><span class="txt"><strong id="btn-lier-titre">Lier un fichier</strong><span id="lie-etat">Réécrit automatiquement après chaque modification</span></span></button>
+            </div>
+
+            <p class="note-rgpd"><svg class="ic"><use href="vendor/lucide/icons.svg#shield-check"/></svg><span>Vos données restent uniquement sur cet appareil, dans ce navigateur : elles ne sont envoyées à aucun serveur. Elles peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports.</span></p>
+            <div class="zone-danger"><button type="button" class="btn btn-danger btn-plein" id="btn-effacer"><svg class="ic"><use href="vendor/lucide/icons.svg#trash-2"/></svg>Effacer toutes mes données</button></div>
+          </div>
+        </div>
+
+        <!-- Aide -->
+        <div class="tiroir-section" data-section="aide" hidden>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#sparkles"/></svg>Démarrer</h3>
+            <ol>
+              <li>Recherchez votre ville ou votre rue (<span class="kbd">Ctrl K</span>) et zoomez sur les maisons.</li>
+              <li>Touchez <strong>« Charger les maisons »</strong> en bas de la carte.</li>
+              <li><strong>Secteurs</strong> : dessinez votre zone pour suivre le pourcentage couvert.</li>
+              <li>Sur le terrain, passez en <strong>Tournée rapide</strong> et touchez chaque maison faite.</li>
+              <li>Suivez vos résultats dans <strong>Bilan</strong> et vos personnes à recontacter dans <strong>Rappels</strong>.</li>
+            </ol>
+            <button type="button" class="btn btn-sm" id="aide-revoir" style="margin-top:12px"><svg class="ic"><use href="vendor/lucide/icons.svg#book-open"/></svg>Revoir la présentation</button>
+          </div>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#mouse-pointer-2"/></svg>Les outils</h3>
+            <ul>
+              <li><strong>Consulter</strong> : touchez une maison pour ouvrir sa fiche (statut, contact, note, historique).</li>
+              <li><strong>Tournée rapide</strong> : choisissez un statut, chaque maison touchée le reçoit. <em>Annuler</em> est proposé à chaque fois.</li>
+              <li><strong>Sélection multiple</strong> : entourez plusieurs maisons (rectangle ou lasso) pour leur appliquer un statut.</li>
+              <li><strong>Ajouter</strong> : placez une maison absente de la carte.</li>
+            </ul>
+          </div>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#keyboard"/></svg>Raccourcis clavier</h3>
+            <div class="raccourcis">
+              <span>Rechercher / actions</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">K</span></span>
+              <span>Consulter · Tournée · Sélection · Ajouter</span><span class="touches"><span class="kbd">V</span><span class="kbd">T</span><span class="kbd">S</span><span class="kbd">A</span></span>
+              <span>Choisir un statut (tournée ou fiche ouverte)</span><span class="touches"><span class="kbd">1</span>…<span class="kbd">6</span></span>
+              <span>Annuler</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">Z</span></span>
+              <span>Fermer / revenir</span><span class="touches"><span class="kbd">Échap</span></span>
+              <span>Afficher l'aide</span><span class="touches"><span class="kbd">?</span></span>
+            </div>
+          </div>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#smartphone"/></svg>Sur le terrain</h3>
+            <ul>
+              <li><strong>Ma position</strong> : point bleu suivi en direct ; l'écran reste allumé pendant le suivi. Votre position n'est jamais enregistrée ni envoyée.</li>
+              <li><strong>Installer l'application</strong> depuis le menu du navigateur (« Installer » / « Ajouter à l'écran d'accueil ») : elle démarre ensuite sans connexion, avec vos données.</li>
+              <li>Hors ligne, les maisons déjà chargées restent cochables ; seul le fond de carte demande du réseau.</li>
+            </ul>
+            <button type="button" class="btn btn-primaire btn-sm" id="aide-installer" hidden style="margin-top:12px"><svg class="ic"><use href="vendor/lucide/icons.svg#download"/></svg>Installer l'application</button>
+          </div>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#info"/></svg>Bon à savoir</h3>
+            <ul>
+              <li>Les maisons viennent d'OpenStreetMap : certaines manquent ou n'ont pas d'adresse ; un immeuble compte pour un bâtiment (indiquez le nombre de logements).</li>
+              <li>Tout est enregistré dans ce navigateur : exportez régulièrement depuis <strong>Données</strong>.</li>
+            </ul>
+            <p class="sous-titre" style="margin-top:12px">SecteurImmo · application 100 % locale · Cartes © OpenStreetMap, © IGN · Icônes Lucide · Police Inter</p>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ================= Fiche d'une maison ================= -->
+    <aside class="fiche" id="panneau" aria-label="Fiche de la maison" inert>
+      <div class="poignee" data-glisse="fiche"></div>
+      <div id="panneau-contenu" style="display:contents"></div>
+    </aside>
+  </main>
+</div>
+
+<div class="menu-plus" id="menu-plus" role="menu" hidden>
+  <button type="button" role="menuitem" data-nav="donnees"><svg class="ic"><use href="vendor/lucide/icons.svg#database"/></svg>Données et sauvegarde</button>
+  <button type="button" role="menuitem" data-nav="aide"><svg class="ic"><use href="vendor/lucide/icons.svg#circle-help"/></svg>Aide</button>
+  <button type="button" role="menuitem" id="btn-theme-mobile"><svg class="ic"><use href="vendor/lucide/icons.svg#sun"/></svg>Thème : <span class="libelle-theme">Auto</span></button>
+</div>
+
+<div id="notifications" aria-live="polite"></div>
+<div id="info-graphique" role="tooltip" hidden></div>
+
+<!-- Palette de commandes -->
+<dialog class="palette" id="palette" aria-label="Rechercher">
+  <div class="palette-saisie">
+    <svg class="ic ic-lg"><use href="vendor/lucide/icons.svg#search"/></svg>
+    <input type="text" id="palette-saisie" placeholder="Adresse, ville, secteur ou action…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="palette-resultats" aria-autocomplete="list">
+    <span class="kbd">Échap</span>
+  </div>
+  <div class="palette-resultats" id="palette-resultats" role="listbox" aria-label="Résultats"></div>
+  <div class="palette-pied"><span><span class="kbd">↑</span><span class="kbd">↓</span> naviguer</span><span><span class="kbd">Entrée</span> choisir</span></div>
+</dialog>
+
+<!-- Importer une sauvegarde -->
+<dialog class="modale" id="dlg-import" aria-labelledby="dlg-import-titre"></dialog>
+<!-- Confirmation -->
+<dialog class="modale" id="dlg-confirmer" aria-labelledby="dlg-confirmer-titre"></dialog>
+<!-- Bienvenue -->
+<dialog class="modale" id="dlg-bienvenue" aria-label="Bienvenue"></dialog>
+
+<!-- Scripts classiques (pas de modules ES) : l'ordre compte -->
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/pwa.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/geocode.js"></script>
+<script src="js/data.js"></script>
+<script src="js/statuts.js"></script>
+<script src="js/map.js"></script>
+<script src="js/coquille.js"></script>
+<script src="js/carte-ui.js"></script>
+<script src="js/panneau.js"></script>
+<script src="js/position.js"></script>
+<script src="js/secteurs.js"></script>
+<script src="js/secteurs-ui.js"></script>
+<script src="js/rappels-ui.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/stats-ui.js"></script>
+<script src="js/outils.js"></script>
+<script src="js/palette.js"></script>
+<script src="js/store.js"></script>
+<script src="js/echange.js"></script>
+<script src="js/aide.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

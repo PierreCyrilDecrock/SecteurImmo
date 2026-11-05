@@ -19,3 +19,10 @@ terrain (cocher les maisons où j'ai prospecté sur une carte).
 - Avant de conclure toute tâche : lancer l'app, la tester dans le navigateur
   (Playwright), et décrire ce qui a été vérifié.
 - Ne jamais committer de données de prospection réelles.
+
+## Repères
+
+- Interface : design system dans `css/tokens.css` (jetons, thèmes clair/sombre sur `<html data-theme>`),
+  icônes Lucide via `Ui.icone(nom)` (sprite `vendor/lucide/icons.svg`), notifications via `Notif`.
+- Tests de bout en bout : `node tests/e2e.js` (Playwright ; services externes simulés).
+- Tout nouveau fichier de l'application doit être ajouté à `FICHIERS` dans `sw.js` (et `VERSION` changée).

@@ -7,15 +7,15 @@ var Pwa = (function () {
 
   var evenementInstall = null;
 
-  function init(alerter) {
+  function init() {
     var local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || local)) {
       navigator.serviceWorker.register('sw.js').catch(function () { /* sans conséquence : l'app marche sans */ });
     }
     window.addEventListener('offline', function () {
-      alerter('Hors ligne : la carte ne se charge plus, mais vos données restent consultables et modifiables.');
+      Notif.afficher('Hors ligne : la carte ne se charge plus, mais vos données restent consultables et modifiables.', { type: 'horsligne', cle: 'reseau', duree: 7000 });
     });
-    window.addEventListener('online', function () { alerter('Connexion rétablie.'); });
+    window.addEventListener('online', function () { Notif.afficher('Connexion rétablie.', { type: 'succes', cle: 'reseau' }); });
 
     // Bouton « Installer » (dans l'aide) : seulement quand le navigateur propose l'installation
     var btn = document.getElementById('aide-installer');

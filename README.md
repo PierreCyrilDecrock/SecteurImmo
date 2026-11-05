@@ -1,19 +1,21 @@
 # SecteurImmo
 
-Application web **100 % HTML / CSS / JavaScript** (sans serveur, sans base de données, sans compte) pour suivre sa prospection immobilière sur le terrain : on coche sur une carte les maisons où l'on a prospecté (contact personnel, prospectus déposé…), on suit sa couverture par secteur et ses statistiques.
+**Le carnet de prospection terrain du mandataire immobilier.** Sur une carte, cochez chaque maison visitée (prospectus déposé, contact, absent, refus, à rappeler), suivez la couverture de vos secteurs, vos rappels et vos résultats de la semaine.
 
-Tout reste dans **votre navigateur**, sur votre appareil. La feuille de route de départ est dans `PLAN.md`.
+Application web **100 % HTML / CSS / JavaScript** : pas de serveur, pas de base de données, pas de compte. Tout reste dans **votre navigateur**, sur votre appareil. Elle s'utilise sur ordinateur et sur téléphone, et s'installe comme une application (y compris hors ligne).
 
 ## Sommaire
 
 1. [Démarrage rapide](#démarrage-rapide)
-2. [Utiliser l'application](#utiliser-lapplication)
-3. [Sur téléphone, sur le terrain](#sur-téléphone-sur-le-terrain)
-4. [Sauvegarde, export, import](#sauvegarde-export-import)
-5. [Publier sur GitHub Pages (facultatif)](#publier-sur-github-pages-facultatif)
-6. [Limites à connaître](#limites-à-connaître)
-7. [FAQ](#faq)
-8. [Pour les développeurs](#pour-les-développeurs)
+2. [L'interface](#linterface)
+3. [Prospecter sur la carte](#prospecter-sur-la-carte)
+4. [Secteurs, rappels, bilan](#secteurs-rappels-bilan)
+5. [Sur le terrain (téléphone)](#sur-le-terrain-téléphone)
+6. [Sauvegarde, export, import](#sauvegarde-export-import)
+7. [Publier sur GitHub Pages](#publier-sur-github-pages-facultatif)
+8. [Limites à connaître](#limites-à-connaître)
+9. [FAQ](#faq)
+10. [Pour les développeurs](#pour-les-développeurs)
 
 ## Démarrage rapide
 
@@ -22,138 +24,151 @@ Un petit serveur local est nécessaire : OpenStreetMap bloque les pages ouvertes
 - **Windows** : double-clic sur `lancer.bat`
 - **Mac / Linux** : `./lancer.sh`
 
-Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre le navigateur. Il faut **Python 3** ([python.org](https://www.python.org/downloads/)). Pour arrêter : fermez la fenêtre (ou Ctrl+C). Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
+Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre le navigateur (il faut **Python 3**, [python.org](https://www.python.org/downloads/)). Sans Python : l'extension « Live Server » de VS Code, ou toute commande qui sert le dossier en statique, convient aussi.
 
-Puis, dans l'application (le bouton **❓** en bas à gauche rappelle ces étapes) :
-1. Cherchez votre ville ou votre rue et zoomez jusqu'aux maisons (zoom 16 minimum).
-2. **Charger les bâtiments de cette zone** : les maisons apparaissent en gris.
-3. Facultatif : **🗺 Secteurs** → dessinez un secteur, chargez ses bâtiments pour suivre le pourcentage couvert.
-4. **⚡ Tournée** : choisissez un statut, touchez chaque maison faite.
-5. **📊 Statistiques** pour suivre l'avancement, **💾** pour exporter régulièrement.
+Au premier lancement, une courte présentation explique l'essentiel. Ensuite :
+1. **Recherchez** votre ville ou votre rue (barre en haut, ou `Ctrl K`).
+2. Zoomez sur les rues puis touchez **« Charger les maisons de cette zone »** (en bas de la carte).
+3. **Secteurs** : dessinez votre zone pour suivre le pourcentage couvert.
+4. Sur le terrain, passez en **Tournée rapide** et touchez chaque maison faite.
+5. Suivez vos résultats dans **Bilan** et vos personnes à recontacter dans **Rappels**.
 
-## Utiliser l'application
+## L'interface
 
-### Carte et recherche
+- **Navigation** : rail à gauche sur ordinateur (Carte, Secteurs, Bilan, Rappels, Données, Aide, Thème), barre d'onglets en bas sur téléphone (Données, Aide et Thème dans « Plus »). Le badge rouge de **Rappels** indique le nombre de personnes à rappeler ; une pastille orange sur **Données** signale qu'aucune sauvegarde n'a été faite depuis 7 jours.
+- **Recherche et commandes** (`Ctrl K` ou `/`, ou la barre de recherche) : adresses et villes, maisons déjà renseignées (par nom, adresse ou note), secteurs, et toutes les actions (nouveau secteur, tournée, exporter, changer de thème…).
+- **Thème** : automatique (suit le système), clair ou sombre ; la carte s'assombrit avec le thème.
+- **Fonds de carte** (bouton calques, en haut à droite) : *Épuré* (plan désaturé, par défaut : les statuts ressortent), *Plan* (OpenStreetMap), *Plan IGN*, *Satellite* (IGN).
+- **Notifications** : chaque action importante est confirmée, avec **« Annuler »** quand c'est utile.
+- **Animations** discrètes (ouverture des panneaux, onde de validation sur une maison, compteurs, graphiques) ; elles sont désactivées si le système demande de réduire les animations.
 
-Carte plein écran ; fonds : plan OpenStreetMap, plan IGN, vue aérienne IGN (menu en haut à droite). Recherche de ville ou d'adresse avec suggestions (géocodage Géoplateforme IGN, secours Nominatim).
+## Prospecter sur la carte
 
 ### Charger les maisons
 
-Le bouton **« Charger les bâtiments de cette zone »** (actif à partir du zoom 16) télécharge les bâtiments OpenStreetMap de la zone visible (API Overpass) et les affiche en gris (« non fait »). Survol : type de bâtiment et adresse si OpenStreetMap la connaît.
+La pastille en bas de la carte guide : *« Zoomez pour afficher les maisons »* (un clic zoome), puis *« Charger les maisons de cette zone »*, puis *« 12 maisons ajoutées »*. Les bâtiments viennent d'OpenStreetMap (API Overpass) :
+- requêtes bornées (zoom ≥ 16, zone ≤ 6 km², une seule à la fois) ; une zone déjà chargée n'est jamais retéléchargée (mémorisée 30 jours) ;
+- en cas d'erreur 429 / 502 / 503 / 504 ou réseau : jusqu'à 4 essais espacés, en alternant avec le serveur miroir `overpass.kumi.systems` ; une fine barre de progression en haut de la carte indique les téléchargements.
 
-- Requêtes bornées : zoom ≥ 16 et zone ≤ 6 km² ; une seule requête à la fois.
-- Une zone (ou un bâtiment) déjà chargé n'est jamais retéléchargé (conservé 30 jours dans la sauvegarde locale).
-- Erreurs 429 / 502 / 503 / 504 ou réseau : jusqu'à 4 essais espacés (2 s, 4 s, 8 s), en alternant entre `overpass-api.de` et le miroir `overpass.kumi.systems`.
-- Les relations multipolygones sont gérées dans les cas simples (contours extérieurs déjà fermés) ; les contours non fermés sont ignorés.
+### Le dock d'outils (en bas)
 
-### Cocher les maisons (barre d'outils)
+| Outil | Raccourci | Effet |
+|---|---|---|
+| **Consulter** | `V` | Toucher une maison ouvre sa fiche. |
+| **Tournée rapide** | `T` | Un statut est actif (choisi dans le bandeau ou avec `1`…`6`) ; chaque maison touchée le reçoit, avec une onde colorée, une vibration sur téléphone et « Annuler ». |
+| **Sélection multiple** | `S` | Entourez des maisons (rectangle ou lasso), puis appliquez un statut à toutes. |
+| **Ajouter** | `A` | Placez une maison absente d'OpenStreetMap. |
+| **Annuler** | `Ctrl Z` | Annule la dernière modification. |
 
-- 👆 **Consulter** : toucher un bâtiment ouvre sa fiche (adresse, statut en un clic, date/heure modifiable, nombre de logements, note). Si OpenStreetMap n'a pas l'adresse, elle est cherchée par géocodage inverse (une fois, à l'ouverture de la fiche).
-- ⚡ **Tournée** : on choisit un statut, puis chaque clic sur une maison le lui applique.
-- ⬚ **Sélection** : glisser un **rectangle** ou un **lasso** (souris ou doigt), puis appliquer un statut à toutes les maisons entourées. La carte ne se déplace pas pendant ce mode.
-- ➕ **Ajouter** : un clic sur la carte crée un point pour une maison absente d'OpenStreetMap (supprimable depuis sa fiche, non annulable).
-- ↶ **Annuler** (ou Ctrl/Cmd+Z) : annule les changements de statut, note, logements, date. `Échap` revient au mode Consulter.
-- 🎨 **Légende** : compteurs par statut, et cases pour masquer/afficher chaque statut.
+`Échap` revient au mode Consulter ou ferme le panneau ouvert. `?` ouvre l'aide.
 
-Statuts : Non fait (gris), Prospectus déposé (bleu, contour tireté), Contact personnel (vert), Absent / à repasser (orange), Refus / Stop pub (rouge), À rappeler (violet). Chaque statut a aussi un style de contour et une icône (visible à fort zoom) pour rester lisible sans distinguer les couleurs.
+### La fiche d'une maison
 
-### Secteurs et suivi de couverture (🗺)
+Statut en un geste (touches `1` à `6`), date et heure du dernier passage, **nom et téléphone** (bouton d'appel direct), nombre de logements, note, **historique des passages**, et **« Maison suivante à faire »** quand la maison appartient à un secteur. Si OpenStreetMap ne connaît pas l'adresse, elle est cherchée une fois à l'ouverture de la fiche (géocodage IGN).
 
-- **Dessiner un secteur** : cliquez sur la carte pour poser les sommets (3 minimum), « Retirer le dernier point » pour corriger, puis « Terminer » ; saisissez le nom (modifiable avec ✎). Pour changer la forme, supprimez-le et redessinez-le.
-- **Avancement** : bâtiments, faits, à faire, pourcentage, barre de répartition par statut. Un bâtiment compte dans un secteur si son centre y est situé. « Fait » = tout statut sauf « Non fait ». Le pourcentage ne porte que sur les bâtiments **chargés** : **📥 Charger les bâtiments** télécharge tout le secteur (cases d'environ 1,2 km, une requête à la fois avec une pause d'une seconde ; 12 cases maximum, au-delà il faut découper le secteur).
-- **🔍 Non faits** : met en évidence (contour rouge épais) les maisons restant à faire, en direct.
-- **⏭ Suivant** : amène à la maison à faire la plus proche de **votre position** (si 📍 est actif) ou du centre de la vue.
-- **Colorer selon l'avancement** : remplissage du clair (peu avancé) au foncé (terminé).
-- Un bâtiment situé dans deux secteurs qui se chevauchent est compté dans les deux.
+Statuts : *Prospectus déposé* (bleu, contour tireté), *Contact personnel* (vert), *Absent / à repasser* (orange), *Refus / Stop pub* (rouge), *À rappeler* (violet), *Non fait* (gris). Chaque statut a une couleur, un style de contour et une icône (à fort zoom) : il reste lisible sans distinguer les couleurs.
 
-### Statistiques (📊)
+### La légende (en bas à gauche)
 
-Écran plein cadre ; deux filtres s'appliquent à **toutes** les rubriques : **période** (tout, 7, 30, 90 jours) et **secteur**.
-- **Résumé** : maisons faites, taux de contact (contacts personnels ÷ maisons faites), prospectus, contacts, à rappeler, absents, refus, logements touchés, répartition par statut.
-- **Évolution** : colonnes empilées par statut, par jour ou par semaine, infobulle au survol ou au clavier, tableau des valeurs. La date retenue pour une maison est celle de son **dernier changement de statut**.
-- **Rues** : avancement par rue, rues non terminées en premier. La rue vient de l'adresse OpenStreetMap ou de celle trouvée à l'ouverture de la fiche ; les maisons de rue inconnue sont regroupées à part.
-- **Liste** : maisons faites filtrables (statut, texte dans les notes/adresses), triables, **export CSV de la sélection** ; un clic sur l'adresse centre la carte et ouvre la fiche.
-- **À rappeler** : de la plus ancienne à la plus récente.
-- **Données de démonstration** (case en haut) : jeu fictif de ~170 maisons, jamais enregistré, qui ne modifie pas vos données.
+Compteurs par statut, avancement des maisons chargées, et filtre : touchez un statut pour le masquer ou l'afficher.
 
-## Sur téléphone, sur le terrain
+## Secteurs, rappels, bilan
 
-- **Interface tactile** : boutons plus grands sur écran tactile, fiche en bas d'écran, zone d'appui élargie autour des maisons.
-- **📍 Ma position** (en bas à droite) : point bleu suivi en direct avec son cercle de précision. La carte vous suit ; déplacez la carte pour arrêter le recentrage (le point reste affiché), recliquez pour recentrer, cliquez pendant le suivi pour arrêter. L'écran reste allumé pendant le suivi si le navigateur le permet. La position n'est ni enregistrée ni envoyée. La géolocalisation exige `localhost` ou une adresse `https://`.
-- **Installer l'application** (PWA) : sur un site `https://` (GitHub Pages, voir plus bas) ou `localhost`, menu du navigateur → « Installer l'application » / « Ajouter à l'écran d'accueil ». Elle démarre ensuite **sans connexion**, avec vos données. Seul le fond de carte (tuiles) et le chargement de nouveaux bâtiments demandent du réseau ; les maisons déjà chargées restent affichées et cochables hors ligne.
-- Les tuiles de carte ne sont **jamais** mises en cache (respect de la politique d'OpenStreetMap) : hors ligne, le fond est gris mais les maisons sont là.
+### Secteurs
+
+**Nouveau secteur** → touchez la carte pour poser les coins (3 minimum), « Terminer », nommez-le. Chaque secteur affiche un anneau d'avancement, le nombre de maisons faites / à faire et la répartition par statut, avec :
+- **Charger les maisons** (ou *Compléter*) : télécharge tout le secteur par cases d'environ 1,2 km, une requête à la fois (12 cases maximum, sinon découpez le secteur) ;
+- **À faire** : met en évidence (contour rose) les maisons restant à faire, en direct ;
+- **Suivante** : amène à la maison à faire la plus proche de votre position (si « Ma position » est actif) ou du centre de la carte, et ouvre sa fiche ;
+- renommer, supprimer (avec confirmation ; les statuts des maisons ne sont pas touchés) ;
+- option *Colorer les secteurs selon leur avancement*.
+
+### Rappels
+
+Les maisons « À rappeler », de la plus ancienne demande à la plus récente (en orange au-delà de 7 jours), avec le nom, la note, **Appeler** (si un numéro est renseigné), **Fiche**, et **Contacté** (la passe en « Contact personnel », avec « Annuler »).
+
+### Bilan
+
+Tableau de bord filtrable par **période** (7, 30, 90 jours, tout) et par **secteur** :
+- **indicateurs** : maisons faites, taux de contact (contacts ÷ maisons faites), contacts personnels, à rappeler — **comparés à la période précédente** ;
+- **objectif de la semaine** (modifiable, 80 maisons par défaut), maisons faites aujourd'hui, **série** de jours d'activité ;
+- **activité** : colonnes empilées par statut, par jour ou par semaine, infobulle et tableau des valeurs ;
+- **répartition** par statut, avancement des **secteurs**, **rues à terminer** ;
+- **journal des passages** : recherche (nom, adresse, note, téléphone), filtre par statut, tri, export CSV de la sélection ; un clic ouvre la maison sur la carte ;
+- **Données d'exemple** : jeu fictif pour découvrir le bilan, jamais enregistré, sans effet sur vos données.
+
+La date retenue pour une maison est celle de son **dernier changement de statut** (l'historique complet est dans la fiche).
+
+## Sur le terrain (téléphone)
+
+- Barre d'onglets en bas ; la fiche et les panneaux s'ouvrent en **feuilles** que l'on referme en les tirant vers le bas (ou en touchant le fond).
+- Grandes cibles tactiles et **zone d'appui élargie** autour des maisons.
+- **Ma position** (bouton viseur à droite) : point bleu suivi en direct ; déplacez la carte pour arrêter le recentrage, retouchez pour recentrer, touchez pendant le suivi pour arrêter. L'écran reste allumé pendant le suivi si le navigateur le permet. La position n'est ni enregistrée ni envoyée (elle exige `localhost` ou `https://`).
+- **Installer l'application** : menu du navigateur → « Installer » / « Ajouter à l'écran d'accueil » (un bouton apparaît aussi dans l'Aide quand le navigateur le propose). Elle démarre ensuite **sans connexion**, avec vos données ; seuls le fond de carte et le chargement de nouvelles maisons demandent du réseau. Les tuiles de carte ne sont jamais mises en cache (règle d'OpenStreetMap).
 
 ## Sauvegarde, export, import
 
-- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, notes, points ajoutés, adresses trouvées, secteurs, contours des bâtiments téléchargés, zones chargées, position de la carte et fond choisi. Tout est restauré au rechargement. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : changer de navigateur, de port ou d'adresse repart de zéro ; utilisez l'export/import pour les déplacer.
-- **💾 Mes données** :
-  - *Exporter (JSON)* : sauvegarde complète (`secteurimmo-AAAA-MM-JJ.json`) ; seuls les contours des bâtiments cochés sont inclus. Format versionné (schéma 2 ; les sauvegardes de schéma 1 restent importables).
-  - *Exporter (CSV)* : `id ; adresse ; statut ; date ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel français). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
-  - *Importer* : aperçu puis **Fusionner** (en cas de conflit sur un bâtiment, l'entrée la plus récente est gardée) ou **Remplacer** (avec, par défaut, téléchargement préalable d'une sauvegarde de vos données actuelles). Le fichier est validé et nettoyé.
-  - *Lier un fichier de sauvegarde* (Chrome / Edge) : le fichier est réécrit automatiquement après chaque modification ; à redonner après un redémarrage du navigateur (« Reconnecter le fichier lié »).
-  - *Effacer toutes mes données*.
-- **Rappel** : un bandeau apparaît si aucun export n'a été fait depuis plus de 7 jours.
-- Sans IndexedDB (navigation privée…), l'application fonctionne sans sauvegarde automatique : un message l'indique, exportez régulièrement.
+Panneau **Données** :
+- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, objectif, maisons chargées, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
+- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 3 ; les sauvegardes des versions précédentes restent importables).
+- **Tableur (CSV)** : `id ; adresse ; nom ; telephone ; statut ; date ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
+- **Importer** (glisser-déposer ou clic) : aperçu, puis **Fusionner** (en cas de doublon, la version la plus récente est gardée) ou **Remplacer** (avec, par défaut, une copie de sécurité de vos données actuelles). Le fichier est validé et nettoyé.
+- **Fichier lié** (Chrome / Edge) : réécrit automatiquement après chaque modification ; à reconnecter après un redémarrage du navigateur.
+- **Effacer toutes mes données** (avec confirmation).
+- Rappel si aucun export depuis plus de 7 jours (notification avec « Exporter », pastille sur Données).
 
 ## Publier sur GitHub Pages (facultatif)
 
-Pratique pour installer l'application sur téléphone en `https://`. Le workflow `.github/workflows/pages.yml` publie uniquement le code (`index.html`, `manifest.json`, `sw.js`, `css/`, `js/`, `vendor/`, `icons/`).
+Pratique pour installer l'application sur téléphone en `https://`. Le workflow `.github/workflows/pages.yml` publie uniquement l'application (`index.html`, `manifest.json`, `sw.js`, `css/`, `js/`, `vendor/`, `icons/`).
 
 1. Sur GitHub : **Settings → Pages → Build and deployment → Source : GitHub Actions**.
 2. Poussez sur la branche `main` (ou lancez le workflow à la main : onglet *Actions* → « Publier sur GitHub Pages » → *Run workflow*).
 3. Le site est disponible sur `https://<votre-compte>.github.io/<nom-du-dépôt>/`.
 
-⚠ **Vos données de prospection ne sont jamais publiées** : elles restent dans votre navigateur. Ne committez jamais d'export (`secteurimmo-*.json`, `*.csv`) : le `.gitignore` les exclut, et le workflow **échoue** si un tel fichier est dans le dépôt. Le code de l'application, lui, est public si le site l'est ; l'adresse du site Pages est publique (selon l'offre de votre compte GitHub, un dépôt privé peut ne pas pouvoir publier de site).
+⚠ **Vos données de prospection ne sont jamais publiées** : elles restent dans votre navigateur. Ne committez jamais d'export (`secteurimmo-*.json`, `*.csv`) : le `.gitignore` les exclut et le workflow **échoue** si un tel fichier est dans le dépôt.
 
 ## Limites à connaître
 
-- **Données OpenStreetMap** : certaines maisons manquent, beaucoup de bâtiments n'ont pas d'adresse (affichée « adresse inconnue » ; le géocodage inverse la complète à l'ouverture de la fiche), et un immeuble est un seul bâtiment pour plusieurs logements (champ « logements », bouton ➕ pour ajouter une maison manquante).
-- **Overpass** : serveur public gratuit, avec limites par IP ; en cas d'indisponibilité, réessayez plus tard.
-- **Clavier / lecteur d'écran** : les maisons (dessinées sur un canevas) ne sont pas atteignables une à une au clavier ; utilisez **Secteurs → ⏭ Suivant** ou **Statistiques → Liste**, dont les boutons ouvrent la fiche de la maison.
-- **Performance** : testé avec 6 000 bâtiments affichés (déplacement fluide) ; les icônes de statut ne sont créées que pour la zone visible.
-- **Non vérifié en conditions réelles** : le développement s'est fait dans un environnement dont le réseau bloquait OpenStreetMap, l'IGN et Overpass ; leur comportement (CORS, limites, champ `distance` du géocodage inverse, tuiles IGN) a été testé avec des réponses simulées. Idem pour le fichier lié (API *File System Access* simulée), l'installation PWA sur un vrai téléphone, la géolocalisation matérielle et le workflow GitHub Pages. Si quelque chose ne marche pas, regardez la console du navigateur.
+- **Données OpenStreetMap** : certaines maisons manquent, beaucoup n'ont pas d'adresse, un immeuble est un seul bâtiment (utilisez « Ajouter » et le champ « Logements »).
+- **Overpass** est un service public gratuit, limité par adresse IP : en cas d'indisponibilité, réessayez plus tard.
+- **Clavier / lecteur d'écran** : les maisons sont dessinées sur un canevas et ne sont pas atteignables une à une au clavier ; utilisez la recherche (`Ctrl K`, par nom ou adresse), **Secteurs → Suivante** ou **Bilan → Journal**, qui ouvrent la fiche.
+- **Performance** : testé avec 6 000 maisons affichées. Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent).
+- **Non vérifié en conditions réelles** : le développement s'est fait dans un environnement dont le réseau bloquait OpenStreetMap, l'IGN et Overpass ; leur comportement (CORS, limites, champ `distance` du géocodage inverse, tuiles IGN) a été testé avec des réponses simulées, comme le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
 
 ## FAQ
 
-**Mes données ont disparu.** Elles sont dans le navigateur : vider les données de navigation, changer de navigateur, d'adresse (`localhost:8000` ≠ `localhost:8080`) ou utiliser la navigation privée les fait disparaître. Exportez régulièrement (💾), ou liez un fichier de sauvegarde.
+**Mes données ont disparu.** Elles sont dans le navigateur : vider les données de navigation, changer de navigateur, d'adresse (`localhost:8000` ≠ `localhost:8080`) ou utiliser la navigation privée les fait disparaître. Exportez régulièrement, ou liez un fichier de sauvegarde.
 
-**La carte reste grise.** Vérifiez la connexion ; essayez un autre fond (menu en haut à droite). Ouvert par double-clic (`file://`), OpenStreetMap bloque les tuiles : utilisez `lancer.bat` / `lancer.sh`.
+**La carte reste grise.** Vérifiez la connexion ; essayez un autre fond. Ouverte par double-clic (`file://`), OpenStreetMap bloque les tuiles : utilisez `lancer.bat` / `lancer.sh`.
 
-**« Zoomez davantage » / bouton grisé.** Le chargement des bâtiments exige le zoom 16 minimum.
+**« Serveur de données occupé ».** Overpass limite les requêtes ; l'application réessaie seule jusqu'à 4 fois.
 
-**« Serveur de données occupé ».** Overpass limite les requêtes ; l'application réessaie seule jusqu'à 4 fois. Patientez ou réessayez plus tard.
-
-**Une maison manque ou une rue est « inconnue ».** Données OpenStreetMap incomplètes : ajoutez la maison avec ➕ ; ouvrir la fiche d'une maison complète son adresse.
-
-**Comment passer d'un ordinateur à un téléphone ?** Exportez en JSON (💾), transférez le fichier, puis *Importer* sur l'autre appareil.
-
-**Comment installer l'application ?** Voir [Sur téléphone](#sur-téléphone-sur-le-terrain). Un bouton « Installer l'application » apparaît aussi dans l'aide (❓) quand le navigateur le propose.
+**Comment passer de l'ordinateur au téléphone ?** Données → Sauvegarde complète, transférez le fichier, puis Données → Importer sur l'autre appareil.
 
 **La localisation ne marche pas.** Autorisez-la pour le site dans les réglages du navigateur ; elle exige `localhost` ou `https://`.
 
 ## Pour les développeurs
 
-Aucun build, aucun npm : des scripts classiques (pas de modules ES) et un objet global par fichier.
+Aucun build, aucun npm pour l'application : des scripts classiques (pas de modules ES), un objet global par fichier, des bibliothèques copiées dans `vendor/`.
 
 ```
 index.html  manifest.json  sw.js  lancer.bat  lancer.sh
-css/style.css
-js/  pwa  geocode  data  statuts  ui  map  panneau  position  secteurs  secteurs-ui
-     stats  stats-ui  outils  store  echange  aide  app
-vendor/leaflet/   (Leaflet 1.9.4, BSD-2)
-icons/            (icônes PWA)
-.github/workflows/pages.yml
+css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau
+js/    pwa · theme · ui · notifications · geocode · data · statuts · map · coquille · carte-ui · panneau
+       position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · outils · palette · store · echange · aide · app
+vendor/ leaflet 1.9.4 (BSD-2) · lucide (icônes, ISC, sous-ensemble en sprite SVG) · inter (police variable, SIL OFL)
+icons/  icônes de l'application installée
+tests/  tests de bout en bout (Playwright) – non publiés
 ```
 
-- `data.js` : Overpass (cache, reprises, miroirs) · `statuts.js` : modèle + annulation · `map.js` : carte, rendu Canvas, icônes limitées à la vue · `store.js` : IndexedDB, schéma versionné (`migrer()`) · `echange.js` : export/import/CSV/fichier lié · `sw.js` : cache « réseau d'abord » des seuls fichiers de l'application.
-- **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION` si un fichier est supprimé), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.
-- Tests : réalisés avec Playwright (réponses des services simulées par interception réseau), y compris hors ligne, géolocalisation simulée, axe-core (accessibilité) et 6 000 bâtiments.
-
-## Bibliothèques
-
-- [Leaflet](https://leafletjs.com/) 1.9.4 (BSD-2), copiée dans `vendor/leaflet/`. Aucune autre dépendance au runtime.
-- Cartes © contributeurs OpenStreetMap, © IGN.
+- **Modèle** : `statuts.js` (fiches, historique, annulation) · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
+- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `notifications.js` · `theme.js`.
+- **Design** : jetons (couleurs, rayons, ombres, mouvements) dans `css/tokens.css`, thème posé sur `<html data-theme>`. Les couleurs des statuts forment une palette catégorielle validée pour les daltoniens (clair et sombre).
+- **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION`), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.
+- **Tests** : `node tests/e2e.js` (Playwright doit être installé ; `axe-core` facultatif pour les contrôles d'accessibilité automatiques ; `node tests/e2e.js secteurs` ne lance qu'une rubrique). Les services externes sont simulés par interception réseau : les tests ne dépendent pas d'Internet.
 
 ## Données et vie privée
 
-Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, bâtiments d'une zone). La position GPS n'est jamais envoyée. Les notes peuvent contenir des données personnelles : protégez vos exports.
+Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, maisons d'une zone). La position GPS n'est jamais envoyée. Les fiches peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports et respectez le RGPD (informez les personnes, ne conservez que le nécessaire).
+
+Cartes © contributeurs OpenStreetMap, © IGN · Icônes [Lucide](https://lucide.dev) (ISC) · Police [Inter](https://rsms.me/inter/) (SIL OFL) · [Leaflet](https://leafletjs.com) (BSD-2).

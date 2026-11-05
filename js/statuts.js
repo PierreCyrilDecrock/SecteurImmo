@@ -14,19 +14,22 @@ var Statuts = (function () {
   // Couleurs de la palette catégorielle validée (écart daltoniens ≥ 8 entre voisines, vérifié par
   // scripts/validate_palette.js du skill dataviz) ; `couleurSombre` = variante pour le thème sombre.
   // Ordre d'empilement des graphiques : prospectus, absent, contact, rappeler, refus (voir ORDRE_GRAPHIQUE).
+  // `icone` = nom d'une icône Lucide (vendor/lucide/icons.svg) ; `court` = libellé compact (puces, légende).
   var LISTE = [
-    { id: 'aucun',      label: 'Non fait',            couleur: '#9aa5b1', couleurSombre: '#9aa5b1', contour: '#5f6b76', tirets: null,       icone: '' },
-    { id: 'prospectus', label: 'Prospectus déposé',   couleur: '#2a78d6', couleurSombre: '#3987e5', contour: '#154a8f', tirets: '6 3',      icone: '📬' },
-    { id: 'contact',    label: 'Contact personnel',   couleur: '#1baf7a', couleurSombre: '#199e70', contour: '#0b6b49', tirets: null,       icone: '💬' },
-    { id: 'absent',     label: 'Absent / à repasser', couleur: '#eb6834', couleurSombre: '#d95926', contour: '#9a3a14', tirets: '2 4',      icone: '🚪' },
-    { id: 'refus',      label: 'Refus / Stop pub',    couleur: '#e34948', couleurSombre: '#e66767', contour: '#8f1f1f', tirets: '10 3 2 3', icone: '⛔' },
-    { id: 'rappeler',   label: 'À rappeler',          couleur: '#6250d6', couleurSombre: '#9085e9', contour: '#3d2f87', tirets: '1 5',      icone: '📞' }
+    { id: 'aucun',      label: 'Non fait',            court: 'Non fait',   couleur: '#9aa5b1', couleurSombre: '#9aa5b1', contour: '#64748b', tirets: null,       icone: 'circle-dashed' },
+    { id: 'prospectus', label: 'Prospectus déposé',   court: 'Prospectus', couleur: '#2a78d6', couleurSombre: '#3987e5', contour: '#154a8f', tirets: '6 3',      icone: 'mail' },
+    { id: 'contact',    label: 'Contact personnel',   court: 'Contact',    couleur: '#1baf7a', couleurSombre: '#199e70', contour: '#0b6b49', tirets: null,       icone: 'message-circle' },
+    { id: 'absent',     label: 'Absent / à repasser', court: 'Absent',     couleur: '#eb6834', couleurSombre: '#d95926', contour: '#9a3a14', tirets: '2 4',      icone: 'door-closed' },
+    { id: 'refus',      label: 'Refus / Stop pub',    court: 'Refus',      couleur: '#e34948', couleurSombre: '#e66767', contour: '#8f1f1f', tirets: '10 3 2 3', icone: 'ban' },
+    { id: 'rappeler',   label: 'À rappeler',          court: 'À rappeler', couleur: '#6250d6', couleurSombre: '#9085e9', contour: '#3d2f87', tirets: '1 5',      icone: 'phone-call' }
   ];
   var ORDRE_GRAPHIQUE = ['prospectus', 'absent', 'contact', 'rappeler', 'refus'];
+  // Ordre des boutons de choix et des raccourcis clavier 1 à 6
+  var ORDRE_CHOIX = ['prospectus', 'contact', 'absent', 'rappeler', 'refus', 'aucun'];
   var parId = {};
   LISTE.forEach(function (s) { parId[s.id] = s; });
 
-  var records = {};   // id -> { statut, date, note, logements }
+  var records = {};   // id -> { statut, date, note, logements, nom, tel, historique: [{ statut, date }] }
   var manuels = {};   // id -> { lat, lon }
   var adresses = {};  // id -> adresse trouvée par géocodage inverse
   var pile = [];      // opérations annulables : { avant: { id: copie|null } }
@@ -57,7 +60,7 @@ var Statuts = (function () {
   // Supprime l'enregistrement s'il n'apporte plus aucune information
   function nettoyer(id) {
     var r = records[id];
-    if (r && (r.statut || 'aucun') === 'aucun' && !r.note && !r.logements) delete records[id];
+    if (r && (r.statut || 'aucun') === 'aucun' && !r.note && !r.logements && !r.nom && !r.tel && !(r.historique && r.historique.length)) delete records[id];
   }
 
   /*
@@ -73,9 +76,18 @@ var Statuts = (function () {
       Object.keys(patch).forEach(function (k) {
         if (patch[k] === undefined || patch[k] === '' || patch[k] === null) delete r[k]; else r[k] = patch[k];
       });
-      if (patch.statut !== undefined && (patch.statut || 'aucun') !== statutAvant && patch.date === undefined) {
+      var statutChange = patch.statut !== undefined && (patch.statut || 'aucun') !== statutAvant;
+      if (statutChange && patch.date === undefined) {
         if ((patch.statut || 'aucun') === 'aucun') delete r.date; else r.date = maintenant();
       }
+      // Historique des passages : une entrée par changement de statut (les 30 dernières)
+      if (statutChange && (r.statut || 'aucun') !== 'aucun') {
+        r.historique = (r.historique || []).concat([{ statut: r.statut, date: r.date }]).slice(-30);
+      } else if (!statutChange && patch.date !== undefined && r.historique && r.historique.length) {
+        var dernier = r.historique[r.historique.length - 1];
+        if (dernier.statut === r.statut) r.historique[r.historique.length - 1] = { statut: r.statut, date: r.date };
+      }
+      if (r.historique && !r.historique.length) delete r.historique;
       if (JSON.stringify(r) === JSON.stringify(ancien || {})) return; // rien n'a changé
       avant[id] = copie(ancien);
       records[id] = r;
@@ -161,7 +173,7 @@ var Statuts = (function () {
 
   return {
     charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
-    LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, parId: function (id) { return parId[id] || parId.aucun; },
+    LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, parId: function (id) { return parId[id] || parId.aucun; },
     get: get, statutDe: statutDe, modifier: modifier, annuler: annuler, peutAnnuler: peutAnnuler,
     surChangement: surChangement, maintenant: maintenant,
     ajouterManuel: ajouterManuel, supprimerManuel: supprimerManuel,

@@ -1,27 +1,45 @@
-/* aide.js – Fenêtre d'aide intégrée (bouton ❓) et message de bienvenue. Expose l'objet global Aide. */
+/*
+ * aide.js – Présentation de bienvenue (premier lancement, revoir depuis l'aide) et panneau « Aide ».
+ * Expose l'objet global Aide.
+ */
 var Aide = (function () {
   'use strict';
 
-  var CLE = 'secteurimmo-aide';   // mémorise que le message de bienvenue a été montré (localStorage, par navigateur)
+  var CLE = 'secteurimmo-aide';   // mémorise que la présentation a été vue (localStorage, par navigateur)
+  var DIAPOS = [
+    { ic: 'map-pinned', t: 'Bienvenue sur SecteurImmo', p: 'Votre carnet de prospection sur la carte : chaque maison visitée est cochée, chaque secteur suivi à la porte près.' },
+    { ic: 'zap', t: 'Une tournée en un geste', p: 'Passez en « Tournée rapide », choisissez un statut et touchez les maisons au fil de la rue. Une erreur ? « Annuler » est proposé à chaque fois.' },
+    { ic: 'layout-dashboard', t: 'Vos résultats au quotidien', p: 'Bilan de la semaine, objectif, personnes à rappeler : tout est calculé pour vous. Vos données restent sur cet appareil, sans compte ni serveur.' }
+  ];
+  var dlg, index = 0;
 
-  function init(alerter) {
-    var dlg = document.getElementById('dlg-aide');
-    var btn = document.getElementById('btn-aide');
-    var ouvrir = function () { Ui.fermerVolets(); dlg.showModal(); };
-    btn.addEventListener('click', ouvrir);
-    document.getElementById('aide-fermer').addEventListener('click', function () { dlg.close(); });
-    // Un clic sur le fond sombre ferme la fenêtre
-    dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
-    dlg.addEventListener('close', function () { btn.focus(); });
-
-    // Bienvenue : une seule fois par navigateur
-    try {
-      if (!localStorage.getItem(CLE)) {
-        localStorage.setItem(CLE, '1');
-        alerter('Bienvenue ! Le bouton ❓ (en bas à gauche) explique comment démarrer.');
-      }
-    } catch (e) { /* stockage indisponible : pas de bienvenue */ }
+  function dessiner() {
+    var d = DIAPOS[index], el = Ui.el;
+    dlg.innerHTML = '';
+    var v = el('div', 'bienvenue-visuel'); var m = el('div', 'medaillon'); m.appendChild(Ui.icone(d.ic)); v.appendChild(m); dlg.appendChild(v);
+    var c = el('div', 'diapo'); var h = el('h2', null, d.t); h.id = 'bienvenue-titre'; c.appendChild(h); c.appendChild(el('p', null, d.p)); dlg.appendChild(c);
+    dlg.setAttribute('aria-labelledby', 'bienvenue-titre');
+    var pied = el('div', 'modale-pied');
+    var points = el('div', 'points-diapo'); points.setAttribute('aria-label', 'Étape ' + (index + 1) + ' sur ' + DIAPOS.length);
+    DIAPOS.forEach(function (x, i) { points.appendChild(el('span', i === index ? 'actif' : '')); });
+    pied.appendChild(points);
+    if (index < DIAPOS.length - 1) pied.appendChild(Ui.bouton('Passer', 'btn btn-fantome', function () { dlg.close(); }, { id: 'bienvenue-passer' }));
+    else pied.appendChild(Ui.bouton('Précédent', 'btn btn-fantome', function () { index--; dessiner(); }));
+    if (index < DIAPOS.length - 1) pied.appendChild(Ui.bouton(['Suivant', Ui.icone('arrow-right', 'ic-sm')], 'btn btn-primaire', function () { index++; dessiner(); }, { id: 'bienvenue-suivant' }));
+    else pied.appendChild(Ui.bouton([Ui.icone('search', 'ic-sm'), 'Trouver mon secteur'], 'btn btn-primaire', function () { dlg.close(); Palette.ouvrir(); }, { id: 'bienvenue-commencer' }));
+    dlg.appendChild(pied);
+    var b = dlg.querySelector('.btn-primaire'); if (b) b.focus();
   }
 
-  return { init: init };
+  function presenter() { index = 0; dessiner(); if (!dlg.open) dlg.showModal(); }
+
+  function init() {
+    dlg = document.getElementById('dlg-bienvenue');
+    document.getElementById('aide-revoir').addEventListener('click', function () { Coquille.fermerTiroir(); presenter(); });
+    var premiere = false;
+    try { premiere = !localStorage.getItem(CLE); if (premiere) localStorage.setItem(CLE, '1'); } catch (e) { /* stockage indisponible */ }
+    if (premiere) setTimeout(presenter, 400);
+  }
+
+  return { init: init, presenter: presenter };
 })();

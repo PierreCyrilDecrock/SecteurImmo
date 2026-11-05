@@ -40,6 +40,13 @@ var Echange = (function () {
       if (typeof r.date === 'string' && r.date.length <= 32) o.date = r.date;
       if (typeof r.note === 'string' && r.note) o.note = r.note.slice(0, 2000);
       if (Number.isInteger(r.logements) && r.logements > 0 && r.logements < 10000) o.logements = r.logements;
+      if (typeof r.nom === 'string' && r.nom.trim()) o.nom = r.nom.trim().slice(0, 120);
+      if (typeof r.tel === 'string' && /^[0-9+().\s-]{3,40}$/.test(r.tel.trim())) o.tel = r.tel.trim();
+      if (Array.isArray(r.historique)) {
+        var h = r.historique.filter(function (x) { return x && valides[x.statut] && typeof x.date === 'string' && x.date.length <= 32; })
+          .slice(-30).map(function (x) { return { statut: x.statut, date: x.date }; });
+        if (h.length) o.historique = h;
+      }
       propre.records[id] = o;
     });
     Object.keys(d.manuels || {}).forEach(function (id) {
@@ -85,15 +92,15 @@ var Echange = (function () {
   // ids : sélection facultative (sinon tous les bâtiments ayant un statut)
   function construireCsv(ids) {
     var recs = Statuts._records(), adr = Statuts.adressesToutes();
-    var lignes = [['id', 'adresse', 'statut', 'date', 'note', 'logements', 'latitude', 'longitude']];
+    var lignes = [['id', 'adresse', 'nom', 'telephone', 'statut', 'date', 'note', 'logements', 'latitude', 'longitude']];
     (ids || Object.keys(recs)).slice().sort().forEach(function (id) {
       if (!recs[id]) return;
       var r = recs[id], c = CarteImmo.centre(id), f = DataImmo.batiment(id);
       var a = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
-      lignes.push([id, a, Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '), r.note || '', r.logements || '',
+      lignes.push([id, a, r.nom || '', r.tel || '', Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '), r.note || '', r.logements || '',
         c ? c[0].toFixed(6) : '', c ? c[1].toFixed(6) : '']);
     });
-    return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 5 && i <= 7); }).join(';'); }).join('\r\n') + '\r\n';
+    return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 7 && i <= 9); }).join(';'); }).join('\r\n') + '\r\n';
   }
 
   function exporterCsv(ids) {
@@ -101,6 +108,7 @@ var Echange = (function () {
   }
 
   function marquerExport() {
+    Notif.afficher('Export téléchargé.', { type: 'succes', cle: 'export' });
     Store.setMeta('dernierExport', Date.now());
     Store.setMeta('rappelReporte', 0);
     majEtat(); majRappel();
@@ -123,41 +131,41 @@ var Echange = (function () {
   }
 
   function proposerImport(brut, propre) {
-    var dlg = el.dialogue;
+    var dlg = el.dialogue, E = Ui.el;
     dlg.innerHTML = '';
     var nbRecs = Object.keys(propre.records).length, nbMan = Object.keys(propre.manuels).length;
     var conflits = Object.keys(propre.records).filter(function (id) { return Statuts.get(id); }).length;
 
-    var h = document.createElement('h2'); h.textContent = 'Importer une sauvegarde'; dlg.appendChild(h);
-    var p = document.createElement('p');
-    p.textContent = 'Fichier du ' + (brut.exporteLe ? new Date(brut.exporteLe).toLocaleString('fr-FR') : 'date inconnue') + ' : ' +
-      nbRecs + ' bâtiment(s) avec statut, ' + nbMan + ' point(s) ajouté(s), ' + propre.batiments.length + ' contour(s), ' + propre.secteurs.secteurs.length + ' secteur(s).' +
-      (conflits ? ' ' + conflits + ' bâtiment(s) existent déjà ici.' : '') +
-      (propre.ignores ? ' ' + propre.ignores + ' élément(s) invalide(s) ignoré(s).' : '');
-    dlg.appendChild(p);
+    var tete = E('div', 'modale-tete');
+    var med = E('span', 'medaillon-modale'); med.appendChild(Ui.icone('upload')); tete.appendChild(med);
+    var tt = E('div'); var h = E('h2', null, 'Importer une sauvegarde'); h.id = 'dlg-import-titre'; tt.appendChild(h);
+    tt.appendChild(E('p', 'sous-titre', 'Fichier du ' + (brut.exporteLe ? new Date(brut.exporteLe).toLocaleString('fr-FR') : 'date inconnue')));
+    tete.appendChild(tt); dlg.appendChild(tete);
 
-    var aide = document.createElement('p'); aide.className = 'aide';
-    aide.textContent = 'Fusionner : ajoute les données ; si un bâtiment existe déjà, l\'entrée la plus récente est conservée. ' +
-      'Remplacer : efface vos données actuelles et les remplace par celles du fichier.';
-    dlg.appendChild(aide);
+    var corps = E('div', 'modale-corps');
+    var chiffres = E('div', 'chiffres-donnees');
+    [[nbRecs, 'maisons renseignées'], [nbMan, 'maisons ajoutées'], [propre.secteurs.secteurs.length, 'secteurs']].forEach(function (c) {
+      var d = E('div'); d.appendChild(E('strong', null, String(c[0]))); d.appendChild(E('span', null, c[1])); chiffres.appendChild(d);
+    });
+    corps.appendChild(chiffres);
+    var p = E('p', null, (conflits ? conflits + ' maison(s) existent déjà ici. ' : '') + (propre.ignores ? propre.ignores + ' élément(s) invalide(s) seront ignorés. ' : '') +
+      'Fusionner ajoute les données (en cas de doublon, la version la plus récente est gardée). Remplacer efface vos données actuelles.');
+    p.style.marginTop = '12px'; p.style.fontSize = '13.5px';
+    corps.appendChild(p);
+    var lab = E('label', 'interrupteur'); lab.style.marginTop = '12px';
+    var cb = E('input'); cb.type = 'checkbox'; cb.checked = true; cb.id = 'import-sauvegarde';
+    lab.appendChild(cb); lab.appendChild(E('span', 'piste')); lab.appendChild(document.createTextNode('Si je remplace, télécharger d\'abord une copie de mes données'));
+    corps.appendChild(lab);
+    dlg.appendChild(corps);
 
-    var lab = document.createElement('label'); lab.className = 'case';
-    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.id = 'import-sauvegarde';
-    lab.appendChild(cb); lab.appendChild(document.createTextNode(' Si je remplace, télécharger d\'abord une sauvegarde de mes données actuelles'));
-    dlg.appendChild(lab);
-
-    var barre = document.createElement('div'); barre.className = 'actions-dialogue';
-    function bouton(id, texte, classe, fn) {
-      var b = document.createElement('button'); b.type = 'button'; b.id = id; b.textContent = texte; if (classe) b.className = classe;
-      b.addEventListener('click', fn); barre.appendChild(b);
-    }
-    bouton('import-annuler', 'Annuler', '', function () { dlg.close(); });
-    bouton('import-remplacer', 'Remplacer', 'btn-danger', function () {
+    var pied = E('div', 'modale-pied');
+    pied.appendChild(Ui.bouton('Annuler', 'btn btn-fantome', function () { dlg.close(); }, { id: 'import-annuler' }));
+    pied.appendChild(Ui.bouton('Remplacer', 'btn btn-danger', function () {
       if (cb.checked && (Object.keys(Statuts._records()).length || Object.keys(Statuts.manuels()).length)) exporterJson();
       dlg.close(); appliquerImport(propre, 'remplacer');
-    });
-    bouton('import-fusionner', 'Fusionner', 'primaire', function () { dlg.close(); appliquerImport(propre, 'fusionner'); });
-    dlg.appendChild(barre);
+    }, { id: 'import-remplacer' }));
+    pied.appendChild(Ui.bouton('Fusionner', 'btn btn-primaire', function () { dlg.close(); appliquerImport(propre, 'fusionner'); }, { id: 'import-fusionner' }));
+    dlg.appendChild(pied);
     dlg.showModal();
   }
 
@@ -214,59 +222,76 @@ var Echange = (function () {
     timerFichier = setTimeout(function () { ecrireFichier(false); }, 3000);
   }
 
-  // ---------- Affichage : menu « Mes données » et rappel ----------
+  // ---------- Affichage : panneau « Données » et rappel de sauvegarde ----------
+
+  function quand(t) {
+    if (!t) return 'jamais';
+    var j = Math.floor((Date.now() - t) / 86400000);
+    return j <= 0 ? 'aujourd\'hui à ' + new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : j === 1 ? 'hier' : 'il y a ' + j + ' jours';
+  }
 
   function majEtat() {
     var nb = Object.keys(Statuts._records()).length, nbMan = Object.keys(Statuts.manuels()).length;
     var dernier = Store.getMeta('dernierExport');
-    el.etat.textContent = (Store.disponible()
-      ? 'Sauvegarde automatique active dans ce navigateur. '
-      : '⚠ Sauvegarde automatique indisponible (navigation privée ?) : exportez régulièrement. ') +
-      nb + ' bâtiment(s) avec statut, ' + nbMan + ' point(s) ajouté(s). Dernier export : ' +
-      (dernier ? new Date(dernier).toLocaleString('fr-FR') : 'jamais') + '.';
+    var ok = Store.disponible();
+    document.getElementById('etat-sauvegarde').classList.toggle('ko', !ok);
+    document.getElementById('etat-sauvegarde-titre').textContent = ok ? 'Sauvegarde automatique active' : 'Sauvegarde automatique indisponible';
+    el.etat.textContent = (ok ? 'Chaque modification est enregistrée dans ce navigateur. ' : 'Navigation privée ? Exportez régulièrement pour ne rien perdre. ') +
+      'Dernier export : ' + quand(dernier) + '.';
+    var ch = document.getElementById('chiffres-donnees'); ch.innerHTML = '';
+    [[nb, 'maisons renseignées'], [nbMan, 'ajoutées à la main'], [Secteurs.liste().length, 'secteurs']].forEach(function (c) {
+      var d = Ui.el('div'); d.appendChild(Ui.el('strong', null, Ui.nombre(c[0]))); d.appendChild(Ui.el('span', null, c[1])); ch.appendChild(d);
+    });
     if (handleLie) {
-      el.lieEtat.hidden = false;
-      el.lieEtat.textContent = 'Fichier lié : ' + (handleLie.name || '') + ' (' + (etatLie || 'en attente') + ')';
-      el.btnLier.textContent = etatLie === 'à reconnecter' ? 'Reconnecter le fichier lié' : 'Changer de fichier lié…';
+      document.getElementById('btn-lier-titre').textContent = etatLie === 'à reconnecter' ? 'Reconnecter le fichier lié' : 'Fichier lié : ' + (handleLie.name || '');
+      el.lieEtat.textContent = etatLie === 'à reconnecter' ? 'Autorisation à redonner après le redémarrage du navigateur' : 'Dernière écriture : ' + (etatLie || 'en attente');
     }
   }
 
+  var rappelSignale = false;
   function majRappel() {
     var aDesDonnees = Object.keys(Statuts._records()).length || Object.keys(Statuts.manuels()).length;
     var ref = Store.getMeta('dernierExport') || Store.getMeta('depuis');
     var maintenant = Date.now();
     var report = Store.getMeta('rappelReporte') || 0;
-    el.rappel.hidden = !(aDesDonnees && ref && (maintenant - ref) > RAPPEL_JOURS * 86400000 && maintenant > report);
+    var visible = !!(aDesDonnees && ref && (maintenant - ref) > RAPPEL_JOURS * 86400000 && maintenant > report);
+    el.rappel.hidden = !visible;
+    Coquille.point('donnees', visible);
+    if (visible && !rappelSignale) {
+      rappelSignale = true;
+      Notif.afficher('Aucune sauvegarde depuis plus de ' + RAPPEL_JOURS + ' jours.', { type: 'alerte', duree: 9000, action: { texte: 'Exporter', fn: exporterJson } });
+    }
   }
 
   function init(options) {
     alerter = options.alerter;
-    el.menu = document.getElementById('donnees');
-    el.btn = document.getElementById('btn-donnees');
     el.etat = document.getElementById('donnees-etat');
     el.lieEtat = document.getElementById('lie-etat');
     el.btnLier = document.getElementById('btn-lier');
     el.dialogue = document.getElementById('dlg-import');
     el.rappel = document.getElementById('rappel');
     var fichier = document.getElementById('fichier-import');
+    var depot = document.getElementById('btn-import');
 
     handleLie = options.fichierLie || null;
     if (handleLie) etatLie = 'à vérifier';
 
-    el.btn.addEventListener('click', function () {
-      var ouvrir = el.menu.hidden;
-      Ui.fermerVolets(); Panneau.fermer();
-      if (ouvrir) { el.menu.hidden = false; el.btn.setAttribute('aria-pressed', 'true'); majEtat(); }
-    });
+    Coquille.enregistrer('donnees', { ouvrir: function () { majEtat(); majRappel(); } });
     document.getElementById('btn-export-json').addEventListener('click', exporterJson);
     document.getElementById('btn-export-csv').addEventListener('click', function () { exporterCsv(); });
-    document.getElementById('btn-import').addEventListener('click', function () { fichier.click(); });
+    depot.addEventListener('click', function () { fichier.click(); });
+    ['dragenter', 'dragover'].forEach(function (t) { depot.addEventListener(t, function (e) { e.preventDefault(); depot.classList.add('survol'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { depot.addEventListener(t, function () { depot.classList.remove('survol'); }); });
+    depot.addEventListener('drop', function (e) { e.preventDefault(); var f = e.dataTransfer.files[0]; if (f) lireFichier(f); });
     fichier.addEventListener('change', function () { if (fichier.files[0]) lireFichier(fichier.files[0]); fichier.value = ''; });
     document.getElementById('btn-effacer').addEventListener('click', function () {
-      if (!window.confirm('Effacer TOUTES vos données de prospection de ce navigateur ?\n(Exportez-les d\'abord si vous voulez les conserver.)')) return;
-      Store.toutEffacer().then(function () { location.reload(); });
+      Ui.confirmer({ titre: 'Effacer toutes vos données ?', message: 'Statuts, contacts, notes, secteurs et maisons chargées seront supprimés de ce navigateur. Exportez-les d\'abord si vous voulez les conserver.', bouton: 'Tout effacer', danger: true })
+        .then(function (ok) { if (ok) Store.toutEffacer().then(function () { location.reload(); }); });
     });
-    if (window.showSaveFilePicker) { el.btnLier.hidden = false; el.btnLier.addEventListener('click', function () { handleLie && etatLie === 'à reconnecter' ? ecrireFichier(true) : lierFichier(); }); }
+    if (window.showSaveFilePicker) {
+      document.getElementById('bloc-lier').hidden = false;
+      el.btnLier.addEventListener('click', function () { if (handleLie && etatLie === 'à reconnecter') ecrireFichier(true); else lierFichier(); });
+    }
 
     document.getElementById('rappel-export').addEventListener('click', exporterJson);
     document.getElementById('rappel-plus-tard').addEventListener('click', function () {
@@ -279,5 +304,5 @@ var Echange = (function () {
     if (handleLie) ecrireFichier(false); // vérifie l'autorisation sans demander (pas de geste utilisateur)
   }
 
-  return { init: init, construireExport: construireExport, construireCsv: construireCsv, exporterCsv: exporterCsv };
+  return { init: init, construireExport: construireExport, construireCsv: construireCsv, exporterCsv: exporterCsv, exporterJson: exporterJson, majEtat: majEtat };
 })();

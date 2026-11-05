@@ -27,6 +27,8 @@ var DataImmo = (function () {
   var zones = [];       // zones déjà chargées : { b: [sud, ouest, nord, est], t: date en ms }
   var VALIDITE_ZONE_MS = 30 * 24 * 3600 * 1000; // au-delà, on retélécharge (OSM évolue)
   var enCours = false;
+  var ecouteursActivite = [];   // informés du début / de la fin des téléchargements (barre de progression)
+  function activite(v) { ecouteursActivite.forEach(function (cb) { cb(v); }); }
 
   // ---------- Zones ----------
 
@@ -150,7 +152,7 @@ var DataImmo = (function () {
     if (surfaceKm2(b) > config.surfaceMaxKm2) return Promise.reject(new Error('Zone trop grande : zoomez davantage.'));
     if (dejaCharge(b)) return Promise.resolve({ nouveaux: [], total: Object.keys(batiments).length, dejaCharge: true });
 
-    enCours = true;
+    enCours = true; activite(true);
     return telecharger(b, surEssai).then(function (json) {
       var nouveaux = [];
       (json.elements || []).forEach(function (el) {
@@ -159,7 +161,7 @@ var DataImmo = (function () {
       });
       zones.push({ b: b, t: Date.now() });
       return { nouveaux: nouveaux, total: Object.keys(batiments).length, dejaCharge: false };
-    }).finally(function () { enCours = false; });
+    }).finally(function () { enCours = false; activite(false); });
   }
 
   // ---------- Libellés ----------
@@ -187,6 +189,10 @@ var DataImmo = (function () {
     typeBatiment: typeBatiment,
     // Pour les tests / phases suivantes
     // Restaure le cache depuis la base locale / un import
+    // Vrai si la zone (LatLngBounds) est entièrement couverte par des zones déjà chargées et récentes
+    estCharge: function (bounds) { return dejaCharge(boite(bounds)); },
+    surActivite: function (cb) { ecouteursActivite.push(cb); },
+    enCours: function () { return enCours; },
     restaurer: function (features, zonesSauvees) {
       (features || []).forEach(function (f) { batiments[f.id] = f; });
       if (zonesSauvees) zones = zonesSauvees;

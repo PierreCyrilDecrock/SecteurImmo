@@ -27,7 +27,10 @@ var Position = (function () {
     btn.classList.toggle('position-libre', actif && !suivre);
     var t = !actif ? 'Ma position : afficher et suivre'
       : (suivre ? 'Ma position : suivi actif (cliquez pour arrêter)' : 'Ma position affichée : cliquez pour recentrer la carte');
-    btn.title = t; btn.setAttribute('aria-label', t);
+    btn.setAttribute('aria-label', t);
+    btn.setAttribute('data-tip', !actif ? 'Ma position' : (suivre ? 'Arrêter le suivi' : 'Recentrer sur moi'));
+    btn.querySelector('use').setAttribute('href', 'vendor/lucide/icons.svg#' + (actif ? 'locate-fixed' : 'locate'));
+    btn.classList.toggle('recherche-gps', actif && derniere === null);
   }
 
   function dessiner(ll, precision) {
@@ -38,7 +41,9 @@ var Position = (function () {
   }
 
   function surPosition(p) {
+    var etaitVide = derniere === null;
     derniere = [p.coords.latitude, p.coords.longitude];
+    if (etaitVide) majBouton();
     var ll = L.latLng(derniere);
     dessiner(ll, Math.min(p.coords.accuracy || 20, 500));
     if (premier) { premier = false; map.setView(ll, Math.max(map.getZoom(), 18)); }

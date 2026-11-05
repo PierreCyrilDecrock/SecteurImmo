@@ -1,112 +1,120 @@
 /*
- * outils.js – Barre d'outils et modes de travail :
- *   consulter  : un clic ouvre la fiche du bâtiment ;
- *   tournee    : un statut est actif, chaque clic sur un bâtiment le lui applique ;
- *   selection  : on entoure plusieurs bâtiments (rectangle ou lasso) puis on leur applique un statut ;
- *   ajouter    : un clic sur la carte crée un point (maison absente d'OpenStreetMap).
- * Contient aussi la légende filtrable et le bouton Annuler.
+ * outils.js – Dock d'outils et modes de travail :
+ *   consulter  : toucher une maison ouvre sa fiche ;
+ *   tournee    : un statut est actif, chaque maison touchée le reçoit (avec « Annuler » à chaque fois) ;
+ *   selection  : on entoure plusieurs maisons (rectangle ou lasso) puis on leur applique un statut ;
+ *   ajouter    : toucher la carte crée une maison absente d'OpenStreetMap ;
+ *   secteur    : tracé d'un nouveau secteur (voir secteurs.js).
+ * Gère aussi le bandeau contextuel au-dessus du dock, le bouton Annuler et les raccourcis clavier.
  * Expose l'objet global Outils.
  */
 var Outils = (function () {
   'use strict';
 
   var map, mode = 'consulter', statutTournee = 'prospectus', forme = 'rectangle';
-  var idsSelection = [];
-  var barre, contexte, legende, btnAnnuler;
-  var dessin = null; // état du tracé en cours { points, apercu, depart }
+  var idsSelection = [], dessin = null, serieTournee = 0;
+  var dock, contexte, btnAnnuler;
+  var el = Ui.el, icone = Ui.icone;
 
   // ---------- Modes ----------
-
   function setMode(m) {
     quitterSelection();
     if (mode === 'selection') desactiverTrace();
     if (mode === 'secteur' && m !== 'secteur') Secteurs.abandonnerDessin();
     mode = m;
-    Panneau.fermer();
-    var conteneur = map.getContainer();
-    conteneur.classList.toggle('mode-tournee', m === 'tournee');
-    conteneur.classList.toggle('mode-ajouter', m === 'ajouter');
-    conteneur.classList.toggle('mode-secteur', m === 'secteur');
-    conteneur.classList.toggle('mode-selection', m === 'selection');
+    if (m !== 'consulter') Panneau.fermer();
+    if (m === 'tournee') serieTournee = 0;
+    var c = map.getContainer();
+    ['tournee', 'ajouter', 'secteur', 'selection'].forEach(function (x) { c.classList.toggle('mode-' + x, m === x); });
     if (m === 'selection') activerTrace();
-    barre.querySelectorAll('[data-mode]').forEach(function (b) {
+    dock.querySelectorAll('[data-mode]').forEach(function (b) {
       b.setAttribute('aria-pressed', b.dataset.mode === m ? 'true' : 'false');
+      var p = b.querySelector('.pastille-active'); if (p) p.remove();
+      if (b.dataset.mode === 'tournee' && m === 'tournee') {
+        var d = el('span', 'pastille-active'); d.style.setProperty('--c', 'var(--st-' + statutTournee + ')'); b.appendChild(d);
+      }
     });
     dessinerContexte();
   }
 
-  // Zone sous la barre d'outils : choix du statut (tournée) ou actions de sélection
+  function teteContexte(ic, titre, aide, apres) {
+    var t = el('div', 'contexte-tete');
+    t.appendChild(icone(ic, 'ic-sm'));
+    t.appendChild(el('span', 'titre', titre));
+    t.appendChild(el('span', 'aide', aide || ''));
+    if (apres) t.appendChild(apres);
+    t.appendChild(Ui.bouton(icone('x', 'ic-sm'), 'btn btn-fantome btn-icone btn-sm', function () { setMode('consulter'); }, { 'aria-label': 'Quitter ce mode', id: 'contexte-fermer' }));
+    return t;
+  }
+
+  function puces(actif, onChoix) {
+    var g = el('div', 'choix-statuts compacts');
+    Statuts.ORDRE_CHOIX.forEach(function (sid, i) {
+      var st = Statuts.parId(sid);
+      var b = Ui.boutonStatut(st, sid === actif, function () { onChoix(sid); }, i + 1);
+      b.querySelector('.libelle').textContent = st.court;
+      b.title = st.label;
+      g.appendChild(b);
+    });
+    return g;
+  }
+
+  // Bandeau au-dessus du dock : choix du statut (tournée), actions de sélection, tracé de secteur…
   function dessinerContexte() {
     contexte.innerHTML = '';
-    contexte.hidden = (mode === 'consulter');
+    contexte.hidden = mode === 'consulter';
     if (mode === 'consulter') return;
 
-    function texte(t) { var p = document.createElement('p'); p.className = 'aide'; p.textContent = t; contexte.appendChild(p); }
-    function boutons(actif, onChoix) {
-      var g = document.createElement('div'); g.className = 'grille-statuts';
-      Statuts.LISTE.forEach(function (st) {
-        g.appendChild(Ui.boutonStatut(st, st.id === actif, function () { onChoix(st.id); }));
-      });
-      contexte.appendChild(g);
-    }
-
     if (mode === 'tournee') {
-      texte('Tournée rapide : chaque clic sur une maison lui applique ce statut.');
-      boutons(statutTournee, function (id) { statutTournee = id; dessinerContexte(); });
+      contexte.appendChild(teteContexte('zap', 'Tournée rapide', 'Touchez chaque maison faite'));
+      contexte.appendChild(puces(statutTournee, function (sid) { statutTournee = sid; setMode('tournee'); }));
+    } else if (mode === 'ajouter') {
+      contexte.appendChild(teteContexte('map-pin-plus', 'Ajouter une maison', 'Touchez la carte à son emplacement'));
+    } else if (mode === 'selection') {
+      var seg = el('div', 'segments');
+      [['rectangle', 'Rectangle'], ['lasso', 'Lasso']].forEach(function (x) {
+        var b = Ui.bouton(x[1], '', function () { forme = x[0]; dessinerContexte(); }, { 'aria-pressed': forme === x[0] ? 'true' : 'false' });
+        b.dataset.forme = x[0]; seg.appendChild(b);
+      });
+      var n = idsSelection.length;
+      contexte.appendChild(teteContexte('square-dashed', n ? n + ' maison' + (n > 1 ? 's' : '') + ' sélectionnée' + (n > 1 ? 's' : '') : 'Sélection multiple',
+        n ? 'Choisissez le statut à appliquer' : 'Glissez sur la carte pour entourer des maisons', seg));
+      if (n) {
+        contexte.appendChild(puces(null, function (sid) {
+          var nb = Statuts.modifier(idsSelection, { statut: sid });
+          Notif.afficher(nb + ' maison' + (nb > 1 ? 's' : '') + ' → ' + Statuts.parId(sid).label, { type: 'succes', action: { texte: 'Annuler', fn: annuler } });
+          Ui.vibrer(20);
+          quitterSelection(); dessinerContexte();
+        }));
+        var a = el('div', 'actions'); a.style.marginTop = '8px';
+        a.appendChild(Ui.bouton('Désélectionner', 'btn btn-sm btn-fantome', function () { quitterSelection(); dessinerContexte(); }, { id: 'btn-desel' }));
+        contexte.appendChild(a);
+      }
     } else if (mode === 'secteur') {
-      var n = Secteurs.nbPointsDessin();
-      texte('Nouveau secteur : cliquez sur la carte pour poser les sommets (' + n + ' point' + (n > 1 ? 's' : '') + '), puis « Terminer ».');
-      var g2 = document.createElement('div'); g2.className = 'grille-statuts';
-      function act(id, t, fn, off) { var b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = 'btn-statut'; b.textContent = t; b.disabled = !!off; b.addEventListener('click', fn); g2.appendChild(b); }
-      act('sect-terminer', '✔ Terminer', function () {
+      var np = Secteurs.nbPointsDessin();
+      contexte.appendChild(teteContexte('pentagon', 'Nouveau secteur', np ? np + ' point' + (np > 1 ? 's' : '') + ' posé' + (np > 1 ? 's' : '') : 'Touchez la carte pour poser les coins'));
+      var act = el('div', 'actions');
+      var fin = Ui.bouton([icone('check', 'ic-sm'), 'Terminer'], 'btn btn-primaire btn-sm', function () {
         var s = Secteurs.terminerDessin();
         if (s) SecteursUi.ouvrirPourRenommer(s.id);
-      }, n < 3);
-      act('sect-retirer', '↶ Retirer le dernier point', function () { Secteurs.retirerDernierPoint(); }, n < 1);
-      act('sect-annuler', '✕ Annuler', function () { setMode('consulter'); });
-      contexte.appendChild(g2);
-    } else if (mode === 'ajouter') {
-      texte('Cliquez sur la carte à l’emplacement de la maison à ajouter.');
-    } else if (mode === 'selection') {
-      var f = document.createElement('div'); f.className = 'forme';
-      [['rectangle', '▭ Rectangle'], ['lasso', '✎ Lasso']].forEach(function (x) {
-        var b = document.createElement('button'); b.type = 'button'; b.className = 'btn-forme';
-        b.dataset.forme = x[0]; b.textContent = x[1]; b.setAttribute('aria-pressed', forme === x[0] ? 'true' : 'false');
-        b.addEventListener('click', function () { forme = x[0]; dessinerContexte(); });
-        f.appendChild(b);
-      });
-      contexte.appendChild(f);
-      if (!idsSelection.length) {
-        texte('Glissez sur la carte pour entourer des maisons. (Pour déplacer la carte : mode Consulter.)');
-      } else {
-        texte(idsSelection.length + ' bâtiment(s) sélectionné(s). Appliquer le statut :');
-        boutons(null, function (id) {
-          Statuts.modifier(idsSelection, { statut: id });
-          quitterSelection();
-          dessinerContexte();
-        });
-        var ann = document.createElement('button'); ann.type = 'button'; ann.className = 'btn-lien';
-        ann.id = 'btn-desel'; ann.textContent = 'Désélectionner';
-        ann.addEventListener('click', function () { quitterSelection(); dessinerContexte(); });
-        contexte.appendChild(ann);
-      }
+      }, { id: 'sect-terminer' });
+      fin.disabled = np < 3;
+      act.appendChild(fin);
+      var ret = Ui.bouton([icone('undo-2', 'ic-sm'), 'Retirer le dernier point'], 'btn btn-sm', function () { Secteurs.retirerDernierPoint(); }, { id: 'sect-retirer' });
+      ret.disabled = np < 1;
+      act.appendChild(ret);
+      act.appendChild(Ui.bouton('Annuler', 'btn btn-sm btn-fantome', function () { setMode('consulter'); }, { id: 'sect-annuler' }));
+      contexte.appendChild(act);
     }
   }
 
   // ---------- Tracé de la sélection (souris ou doigt) ----------
-
-  function activerTrace() {
-    map.dragging.disable();
-    map.getContainer().addEventListener('pointerdown', debutTrace);
-  }
-  function desactiverTrace() {
-    map.getContainer().removeEventListener('pointerdown', debutTrace);
-    map.dragging.enable();
-  }
+  function activerTrace() { map.dragging.disable(); map.getContainer().addEventListener('pointerdown', debutTrace); }
+  function desactiverTrace() { map.getContainer().removeEventListener('pointerdown', debutTrace); map.dragging.enable(); }
 
   function debutTrace(e) {
     if (!e.isPrimary || e.button > 0) return;
-    if (e.target.closest('.leaflet-control, #recherche, #outils, #contexte, #legende, #panneau, #batiments')) return;
+    if (e.target.closest('.leaflet-control')) return;
     e.preventDefault();
     quitterSelection();
     var c = map.getContainer();
@@ -117,40 +125,31 @@ var Outils = (function () {
     c.addEventListener('pointerup', finTrace);
     c.addEventListener('pointercancel', finTrace);
   }
-
   function traceEnCours(e) {
     if (!dessin) return;
     var ll = map.mouseEventToLatLng(e);
     if (Math.abs(e.clientX - dessin.pixelsDepart[0]) + Math.abs(e.clientY - dessin.pixelsDepart[1]) > 6) dessin.deplace = true;
     dessin.points.push(ll);
     if (dessin.apercu) map.removeLayer(dessin.apercu);
-    var style = { color: '#ffd600', weight: 3, dashArray: '6 4', fillOpacity: 0.12, interactive: false };
-    dessin.apercu = (forme === 'rectangle')
-      ? L.rectangle(L.latLngBounds(dessin.depart, ll), style)
-      : L.polygon(dessin.points, style);
+    var style = { color: '#f59e0b', weight: 2.5, dashArray: '6 5', fillColor: '#f59e0b', fillOpacity: 0.1, interactive: false };
+    dessin.apercu = forme === 'rectangle' ? L.rectangle(L.latLngBounds(dessin.depart, ll), style) : L.polygon(dessin.points, style);
     dessin.apercu.addTo(map);
   }
-
   function finTrace(e) {
     var c = map.getContainer();
-    c.removeEventListener('pointermove', traceEnCours);
-    c.removeEventListener('pointerup', finTrace);
-    c.removeEventListener('pointercancel', finTrace);
+    c.removeEventListener('pointermove', traceEnCours); c.removeEventListener('pointerup', finTrace); c.removeEventListener('pointercancel', finTrace);
     if (!dessin) return;
     var d = dessin; dessin = null;
     if (d.apercu) map.removeLayer(d.apercu);
     if (!d.deplace || e.type === 'pointercancel') return;
     var ids;
-    if (forme === 'rectangle') {
-      ids = CarteImmo.idsDans(L.latLngBounds(d.depart, d.points[d.points.length - 1]));
-    } else if (d.points.length >= 3) {
-      ids = CarteImmo.idsDans(d.points.map(function (p) { return [p.lat, p.lng]; }));
-    } else ids = [];
+    if (forme === 'rectangle') ids = CarteImmo.idsDans(L.latLngBounds(d.depart, d.points[d.points.length - 1]));
+    else if (d.points.length >= 3) ids = CarteImmo.idsDans(d.points.map(function (p) { return [p.lat, p.lng]; }));
+    else ids = [];
     idsSelection = ids;
     CarteImmo.surligner(ids);
     dessinerContexte();
   }
-
   function quitterSelection() {
     if (dessin && dessin.apercu) map.removeLayer(dessin.apercu);
     dessin = null;
@@ -158,91 +157,75 @@ var Outils = (function () {
     idsSelection = [];
   }
 
-  // ---------- Clics sur la carte ----------
-
+  // ---------- Clics ----------
   function surClicBatiment(id, ll) {
     if (mode === 'secteur') { if (ll) Secteurs.ajouterPoint(ll); return; }
-    if (mode === 'tournee') Statuts.modifier([id], { statut: statutTournee });
-    else if (mode === 'consulter') Panneau.ouvrir(id);
+    if (mode === 'tournee') {
+      if (Statuts.statutDe(id) === statutTournee) { CarteImmo.onde(id); return; }
+      Statuts.modifier([id], { statut: statutTournee });
+      CarteImmo.onde(id, statutTournee); Ui.vibrer();
+      serieTournee++;
+      Notif.afficher(Statuts.parId(statutTournee).label + (serieTournee > 1 ? ' · ' + serieTournee + ' maisons' : ''), {
+        type: 'succes', cle: 'tournee', duree: 4500, action: { texte: 'Annuler', fn: function () { serieTournee = Math.max(0, serieTournee - 1); annuler(); } }
+      });
+    } else if (mode === 'consulter') Panneau.ouvrir(id);
   }
-
   function surClicCarte(e) {
     if (mode === 'secteur') { Secteurs.ajouterPoint(e.latlng); return; }
-    if (mode !== 'ajouter') return;
+    if (mode !== 'ajouter') { if (mode === 'consulter' && Panneau.ouvert()) Panneau.fermer(); return; }
     var id = Statuts.ajouterManuel(e.latlng.lat, e.latlng.lng);
     CarteImmo.afficherManuel(id, Statuts.manuels()[id]);
-    majLegende();
+    CarteUi.majLegende();
     setMode('consulter');
     Panneau.ouvrir(id);
+    Notif.afficher('Maison ajoutée sur la carte.', { type: 'succes' });
   }
 
   // ---------- Annuler ----------
-
   function majAnnuler() { btnAnnuler.disabled = !Statuts.peutAnnuler(); }
   function annuler() {
-    if (Statuts.annuler()) majLegende();
+    if (Statuts.annuler()) { CarteUi.majLegende(); Notif.afficher('Dernière modification annulée.', { cle: 'annuler', duree: 2200 }); }
     majAnnuler();
   }
 
-  // ---------- Légende (filtre + compteurs) ----------
-
-  function majLegende() {
-    var total = CarteImmo.total();
-    var c = Statuts.compter(total);
-    legende.querySelectorAll('li').forEach(function (li) {
-      li.querySelector('.compte').textContent = c[li.dataset.statut];
-    });
+  // ---------- Raccourcis clavier ----------
+  function raccourcis(e) {
+    if (document.querySelector('dialog[open]')) return;
+    var mod = e.ctrlKey || e.metaKey, k = e.key;
+    if (mod && k.toLowerCase() === 'k') { e.preventDefault(); Palette.ouvrir(); return; }
+    if (Ui.saisieActive()) return;
+    if (mod && !e.shiftKey && k.toLowerCase() === 'z') { e.preventDefault(); annuler(); return; }
+    if (k === 'Escape') { if (mode !== 'consulter') setMode('consulter'); else Coquille.echap(); return; }
+    if (mod || e.altKey) return;
+    if (k === '/') { e.preventDefault(); Palette.ouvrir(); return; }
+    if (k === '?') { Coquille.ouvrirTiroir('aide'); return; }
+    if (Coquille.vue() !== 'carte') return;
+    var modes = { v: 'consulter', t: 'tournee', s: 'selection', a: 'ajouter' };
+    if (modes[k.toLowerCase()]) { setMode(modes[k.toLowerCase()]); return; }
+    if (/^[1-6]$/.test(k)) {
+      var sid = Statuts.ORDRE_CHOIX[+k - 1];
+      if (Panneau.ouvert()) Panneau.choisir(sid);
+      else if (mode === 'tournee') { statutTournee = sid; setMode('tournee'); }
+      else if (mode === 'selection' && idsSelection.length) { var b = contexte.querySelector('[data-statut="' + sid + '"]'); if (b) b.click(); }
+    }
   }
-
-  function construireLegende() {
-    var ul = document.createElement('ul');
-    Statuts.LISTE.forEach(function (st) {
-      var li = document.createElement('li'); li.dataset.statut = st.id;
-      var l = document.createElement('label');
-      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
-      cb.setAttribute('aria-label', 'Afficher : ' + st.label);
-      cb.addEventListener('change', function () { CarteImmo.filtrer(st.id, cb.checked); });
-      var p = document.createElement('span'); p.className = 'pastille'; p.style.background = st.couleur; p.style.borderColor = st.contour;
-      l.appendChild(cb); l.appendChild(p);
-      l.appendChild(document.createTextNode((st.icone ? st.icone + ' ' : '') + st.label));
-      var n = document.createElement('span'); n.className = 'compte'; n.textContent = '0';
-      li.appendChild(l); li.appendChild(n); ul.appendChild(li);
-    });
-    legende.appendChild(ul);
-  }
-
-  // ---------- Initialisation ----------
 
   function init(carte) {
     map = carte;
-    barre = document.getElementById('outils');
-    contexte = document.getElementById('contexte');
-    legende = document.getElementById('legende');
-    btnAnnuler = document.getElementById('btn-annuler');
-    construireLegende();
-
-    barre.querySelectorAll('[data-mode]').forEach(function (b) {
+    dock = document.getElementById('dock'); contexte = document.getElementById('contexte'); btnAnnuler = document.getElementById('btn-annuler');
+    dock.querySelectorAll('[data-mode]').forEach(function (b) {
       b.addEventListener('click', function () { setMode(b.dataset.mode === mode && mode !== 'consulter' ? 'consulter' : b.dataset.mode); });
     });
     btnAnnuler.addEventListener('click', annuler);
-    var btnLeg = document.getElementById('btn-legende');
-    btnLeg.addEventListener('click', function () {
-      legende.hidden = !legende.hidden;
-      btnLeg.setAttribute('aria-pressed', legende.hidden ? 'false' : 'true');
-    });
-
     CarteImmo.definirSurClic(surClicBatiment);
     map.on('click', surClicCarte);
-    Statuts.surChangement(function () { majAnnuler(); majLegende(); });
+    Statuts.surChangement(majAnnuler);
     majAnnuler();
-
-    // Raccourcis clavier : Ctrl/Cmd+Z annule, Échap revient au mode Consulter
-    document.addEventListener('keydown', function (e) {
-      var champ = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !champ) { e.preventDefault(); annuler(); }
-      else if (e.key === 'Escape' && !champ) { if (mode !== 'consulter') setMode('consulter'); else Panneau.fermer(); }
-    });
+    document.addEventListener('keydown', raccourcis);
   }
 
-  return { init: init, setMode: setMode, majLegende: majLegende, rafraichirContexte: dessinerContexte };
+  return {
+    init: init, setMode: setMode, mode: function () { return mode; },
+    majLegende: function () { CarteUi.majLegende(); }, rafraichirContexte: dessinerContexte, annuler: annuler
+  };
 })();
