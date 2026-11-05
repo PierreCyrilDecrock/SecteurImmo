@@ -12,7 +12,7 @@ var Store = (function () {
 
   var NOM_BASE = 'secteurimmo';
   var VERSION_BASE = 1;
-  var SCHEMA = 3;            // version du format des données (export compris)
+  var SCHEMA = 4;            // version du format des données (export compris)
   var db = null;
   var attente = null;        // écritures en attente : { magasin: { cle: valeur|null } }
   var timer = null;
@@ -50,6 +50,7 @@ var Store = (function () {
   function migrer(donnees, schemaLu) {
     // Schéma 1 -> 2 : ajout des secteurs (absents = liste vide, déjà géré par les valeurs par défaut)
     // Schéma 2 -> 3 : fiches enrichies (nom, téléphone, historique des passages) : champs facultatifs, rien à convertir
+    // Schéma 3 -> 4 : étiquettes, qualification du contact, statuts commerciaux : champs facultatifs, rien à convertir
     // if (schemaLu < 3) { … }  ← à compléter quand le format changera
     return donnees;
   }
@@ -62,8 +63,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });
@@ -73,6 +74,22 @@ var Store = (function () {
   }
 
   function disponible() { return !!db; }
+
+  // ---------- Stockage persistant ----------
+  // Sans protection, le navigateur peut effacer les données d'un site quand l'espace disque manque.
+  // navigator.storage.persist() demande au navigateur de ne pas le faire (accordé d'office par Chrome
+  // aux sites utilisés régulièrement ou installés ; Firefox demande l'autorisation à l'utilisateur).
+  function etatStockage() {
+    var st = navigator.storage;
+    if (!st || !st.persisted) return Promise.resolve({ gere: false, persiste: false, usage: null, quota: null });
+    return Promise.all([st.persisted(), st.estimate ? st.estimate() : Promise.resolve({})]).then(function (r) {
+      return { gere: true, persiste: !!r[0], usage: r[1].usage || null, quota: r[1].quota || null };
+    }).catch(function () { return { gere: false, persiste: false, usage: null, quota: null }; });
+  }
+  function demanderPersistance() {
+    if (!navigator.storage || !navigator.storage.persist) return Promise.resolve(false);
+    return navigator.storage.persist().catch(function () { return false; });
+  }
 
   // ---------- Écriture groupée ----------
 
@@ -162,6 +179,7 @@ var Store = (function () {
       Object.keys(adr).forEach(function (id) { tx.objectStore('adresses').put({ id: id, label: adr[id] }); });
       (batimentsAGarder || []).forEach(function (f) { tx.objectStore('batiments').put(Object.assign({}, f)); });
       tx.objectStore('kv').put(Secteurs.exporter(), 'secteurs');
+      tx.objectStore('kv').put(Etiquettes.exporter(), 'etiquettes');
       tx.oncomplete = function () { signaler(true); ok(); };
       tx.onerror = tx.onabort = function () { signaler(false); ok(); };
     });
@@ -178,7 +196,7 @@ var Store = (function () {
   }
 
   return {
-    SCHEMA: SCHEMA, init: init, disponible: disponible, demarrer: demarrer, flush: ecrire, surEtat: surEtat,
+    SCHEMA: SCHEMA, init: init, disponible: disponible, etatStockage: etatStockage, demanderPersistance: demanderPersistance, demarrer: demarrer, flush: ecrire, surEtat: surEtat,
     enregistrerBatiments: enregistrerBatiments, enregistrerZones: enregistrerZones, enregistrerPrefs: enregistrerPrefs,
     kvSet: kvSet, enregistrerSecteurs: function (d) { planifier('kv', 'secteurs', d); }, kvSetIsole: kvSetIsole, chargerMeta: chargerMeta, getMeta: getMeta, setMeta: setMeta,
     toutReecrire: toutReecrire, toutEffacer: toutEffacer

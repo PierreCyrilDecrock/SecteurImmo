@@ -21,6 +21,7 @@
   Palette.init();
   Pwa.init();
   Secteurs.surStructure(function () { Store.enregistrerSecteurs(Secteurs.exporter()); });
+  Etiquettes.surChangement(function () { Store.kvSet('etiquettes', Etiquettes.exporter()); });
 
   // ---- Restauration depuis la base locale, puis sauvegarde automatique ----
   var timerPrefs;
@@ -30,7 +31,7 @@
       Statuts.charger(d, 'remplacer', true);      // silencieux : déjà en base
       CarteImmo.afficherBatiments(d.batiments);
       CarteImmo.synchroniserManuels(Statuts.manuels());
-      Object.keys(Statuts._records()).forEach(CarteImmo.rafraichir);
+      if (d.etiquettes) Etiquettes.charger(d.etiquettes, 'remplacer');
       Secteurs.charger(d.secteurs, 'remplacer');
       CarteUi.majLegende();
       CarteImmo.appliquerPrefs(d.prefs);
@@ -46,6 +47,16 @@
     RappelsUi.dessiner();
     CarteUi.majPastille(); CarteUi.majAccueil();
     Aide.init();
+    // Protection du stockage : demandée automatiquement dès qu'il y a des données à protéger
+    // (sans effet visible sur Chrome ; Firefox peut afficher une demande d'autorisation)
+    var protectionDemandee = false;
+    function proteger() {
+      if (protectionDemandee || !Object.keys(Statuts._records()).length) return;
+      protectionDemandee = true;
+      Store.etatStockage().then(function (e) { if (e.gere && !e.persiste) Store.demanderPersistance(); });
+    }
+    proteger();
+    Statuts.surDonnees(proteger);   // première maison renseignée pendant la session
     document.documentElement.classList.add('pret');
   });
 })();

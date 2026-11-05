@@ -148,6 +148,11 @@
               <span class="rond"><svg class="ic"><use href="vendor/lucide/icons.svg#shield-check"/></svg></span>
               <div><strong id="etat-sauvegarde-titre">Sauvegarde automatique active</strong><p id="donnees-etat"></p></div>
             </div>
+            <div class="etat-sauvegarde" id="etat-stockage">
+              <span class="rond"><svg class="ic"><use href="vendor/lucide/icons.svg#hard-drive"/></svg></span>
+              <div style="flex:1"><strong id="etat-stockage-titre">Stockage</strong><p id="etat-stockage-texte"></p></div>
+              <button type="button" class="btn btn-sm btn-primaire" id="btn-proteger" hidden>Protéger</button>
+            </div>
             <div class="chiffres-donnees" id="chiffres-donnees"></div>
 
             <h3 class="etiquette" style="margin-top:6px">Exporter</h3>
@@ -191,11 +196,20 @@
             </ul>
           </div>
           <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#funnel"/></svg>Suivi commercial</h3>
+            <ul>
+              <li><strong>Statuts commerciaux</strong> : après un contact, passez la maison en <em>Estimation faite</em>, <em>Mandat signé</em> ou <em>Mandat concurrent / vendu</em>. L'historique garde chaque étape.</li>
+              <li><strong>Qualification</strong> (fiche) : potentiel chaud / tiède / froid, projet, échéance, propriétaire ou locataire. Les prospects chauds remontent dans le Bilan et les Rappels.</li>
+              <li><strong>Étiquettes</strong> : vos repères rapides (Stop pub, Chien…). Créez-les depuis la fiche (« Nouvelle ») ou la recherche (« Gérer les étiquettes »).</li>
+              <li><strong>Filtrer la carte</strong> : dans la légende, n'affichez que les maisons d'une étiquette, d'un potentiel ou d'un projet.</li>
+            </ul>
+          </div>
+          <div class="aide-section">
             <h3><svg class="ic"><use href="vendor/lucide/icons.svg#keyboard"/></svg>Raccourcis clavier</h3>
             <div class="raccourcis">
               <span>Rechercher / actions</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">K</span></span>
               <span>Consulter · Tournée · Sélection · Ajouter</span><span class="touches"><span class="kbd">V</span><span class="kbd">T</span><span class="kbd">S</span><span class="kbd">A</span></span>
-              <span>Choisir un statut (tournée ou fiche ouverte)</span><span class="touches"><span class="kbd">1</span>…<span class="kbd">6</span></span>
+              <span>Choisir un statut (tournée ou fiche ouverte)</span><span class="touches"><span class="kbd">1</span>…<span class="kbd">9</span></span>
               <span>Annuler</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">Z</span></span>
               <span>Fermer / revenir</span><span class="touches"><span class="kbd">Échap</span></span>
               <span>Afficher l'aide</span><span class="touches"><span class="kbd">?</span></span>
@@ -255,33 +269,37 @@
 <dialog class="modale" id="dlg-import" aria-labelledby="dlg-import-titre"></dialog>
 <!-- Confirmation -->
 <dialog class="modale" id="dlg-confirmer" aria-labelledby="dlg-confirmer-titre"></dialog>
+<!-- Gestion des étiquettes -->
+<dialog class="modale" id="dlg-etiquettes" aria-labelledby="dlg-etiquettes-titre"></dialog>
 <!-- Bienvenue -->
 <dialog class="modale" id="dlg-bienvenue" aria-label="Bienvenue"></dialog>
 
-<!-- Scripts classiques (pas de modules ES) : l'ordre compte -->
-<script src="vendor/leaflet/leaflet.js"></script>
-<script src="js/pwa.js"></script>
-<script src="js/theme.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/notifications.js"></script>
-<script src="js/geocode.js"></script>
-<script src="js/data.js"></script>
-<script src="js/statuts.js"></script>
-<script src="js/map.js"></script>
-<script src="js/coquille.js"></script>
-<script src="js/carte-ui.js"></script>
-<script src="js/panneau.js"></script>
-<script src="js/position.js"></script>
-<script src="js/secteurs.js"></script>
-<script src="js/secteurs-ui.js"></script>
-<script src="js/rappels-ui.js"></script>
-<script src="js/stats.js"></script>
-<script src="js/stats-ui.js"></script>
-<script src="js/outils.js"></script>
-<script src="js/palette.js"></script>
-<script src="js/store.js"></script>
-<script src="js/echange.js"></script>
-<script src="js/aide.js"></script>
-<script src="js/app.js"></script>
+<!-- Scripts classiques (pas de modules ES) : l'ordre compte ; « defer » = téléchargés en parallèle, exécutés dans l'ordre après l'analyse de la page -->
+<script src="vendor/leaflet/leaflet.js" defer></script>
+<script src="js/pwa.js" defer></script>
+<script src="js/theme.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/notifications.js" defer></script>
+<script src="js/geocode.js" defer></script>
+<script src="js/data.js" defer></script>
+<script src="js/statuts.js" defer></script>
+<script src="js/etiquettes.js" defer></script>
+<script src="js/map.js" defer></script>
+<script src="js/coquille.js" defer></script>
+<script src="js/carte-ui.js" defer></script>
+<script src="js/etiquettes-ui.js" defer></script>
+<script src="js/panneau.js" defer></script>
+<script src="js/position.js" defer></script>
+<script src="js/secteurs.js" defer></script>
+<script src="js/secteurs-ui.js" defer></script>
+<script src="js/rappels-ui.js" defer></script>
+<script src="js/stats.js" defer></script>
+<script src="js/stats-ui.js" defer></script>
+<script src="js/outils.js" defer></script>
+<script src="js/palette.js" defer></script>
+<script src="js/store.js" defer></script>
+<script src="js/echange.js" defer></script>
+<script src="js/aide.js" defer></script>
+<script src="js/app.js" defer></script>
 </body>
 </html>

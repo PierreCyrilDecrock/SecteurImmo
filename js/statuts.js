@@ -1,35 +1,57 @@
 /*
- * statuts.js – Modèle de données de la prospection (en mémoire pour l'instant).
+ * statuts.js – Modèle de données de la prospection.
  *
- * Pour chaque bâtiment (clé = id OSM, ex. "way/123", ou "man/…" pour un point
- * ajouté à la main) on garde : { statut, date, note, logements }.
+ * Pour chaque maison (clé = id OSM, ex. "way/123", ou "man/…" pour une maison ajoutée à la main) :
+ * { statut, date, note, logements, nom, tel, historique: [{ statut, date }], etiquettes: [ids],
+ *   occupant, projet, echeance, potentiel }.
  * Toute modification passe par modifier() afin de pouvoir être annulée (Ctrl+Z).
- * La sauvegarde dans IndexedDB viendra en phase 4 (via surChangement).
  * Expose l'objet global Statuts.
  */
 var Statuts = (function () {
   'use strict';
 
   // Couleur + contour en pointillés + icône : on ne se fie pas à la seule teinte (daltonisme).
-  // Couleurs de la palette catégorielle validée (écart daltoniens ≥ 8 entre voisines, vérifié par
-  // scripts/validate_palette.js du skill dataviz) ; `couleurSombre` = variante pour le thème sombre.
-  // Ordre d'empilement des graphiques : prospectus, absent, contact, rappeler, refus (voir ORDRE_GRAPHIQUE).
+  // Couleurs = palette catégorielle validée à 8 teintes (écart daltoniens ≥ 8 entre voisines dans
+  // ORDRE_GRAPHIQUE, vérifié avec scripts/validate_palette.js du skill dataviz, en clair et en sombre).
   // `icone` = nom d'une icône Lucide (vendor/lucide/icons.svg) ; `court` = libellé compact (puces, légende).
   var LISTE = [
-    { id: 'aucun',      label: 'Non fait',            court: 'Non fait',   couleur: '#9aa5b1', couleurSombre: '#9aa5b1', contour: '#64748b', tirets: null,       icone: 'circle-dashed' },
-    { id: 'prospectus', label: 'Prospectus déposé',   court: 'Prospectus', couleur: '#2a78d6', couleurSombre: '#3987e5', contour: '#154a8f', tirets: '6 3',      icone: 'mail' },
-    { id: 'contact',    label: 'Contact personnel',   court: 'Contact',    couleur: '#1baf7a', couleurSombre: '#199e70', contour: '#0b6b49', tirets: null,       icone: 'message-circle' },
-    { id: 'absent',     label: 'Absent / à repasser', court: 'Absent',     couleur: '#eb6834', couleurSombre: '#d95926', contour: '#9a3a14', tirets: '2 4',      icone: 'door-closed' },
-    { id: 'refus',      label: 'Refus / Stop pub',    court: 'Refus',      couleur: '#e34948', couleurSombre: '#e66767', contour: '#8f1f1f', tirets: '10 3 2 3', icone: 'ban' },
-    { id: 'rappeler',   label: 'À rappeler',          court: 'À rappeler', couleur: '#6250d6', couleurSombre: '#9085e9', contour: '#3d2f87', tirets: '1 5',      icone: 'phone-call' }
+    { id: 'aucun',      label: 'Non fait',            court: 'Non fait',   couleur: '#9aa5b1', couleurSombre: '#9aa5b1', contour: '#64748b', tirets: null,          icone: 'circle-dashed' },
+    { id: 'prospectus', label: 'Prospectus déposé',   court: 'Prospectus', couleur: '#2a78d6', couleurSombre: '#3987e5', contour: '#154a8f', tirets: '6 3',         icone: 'mail' },
+    { id: 'contact',    label: 'Contact personnel',   court: 'Contact',    couleur: '#1baf7a', couleurSombre: '#199e70', contour: '#0b6b49', tirets: null,          icone: 'message-circle' },
+    { id: 'absent',     label: 'Absent / à repasser', court: 'Absent',     couleur: '#eb6834', couleurSombre: '#d95926', contour: '#9a3a14', tirets: '2 4',         icone: 'door-closed' },
+    { id: 'refus',      label: 'Refus / Stop pub',    court: 'Refus',      couleur: '#e34948', couleurSombre: '#e66767', contour: '#8f1f1f', tirets: '10 3 2 3',    icone: 'ban' },
+    { id: 'rappeler',   label: 'À rappeler',          court: 'À rappeler', couleur: '#6250d6', couleurSombre: '#9085e9', contour: '#3d2f87', tirets: '1 5',         icone: 'phone-call' },
+    // Statuts commerciaux (suite d'un contact)
+    { id: 'estimation', label: 'Estimation faite',    court: 'Estimation', couleur: '#eda100', couleurSombre: '#c98500', contour: '#8a5d00', tirets: '4 2',         icone: 'calculator' },
+    { id: 'mandat',     label: 'Mandat signé',        court: 'Mandat',     couleur: '#008300', couleurSombre: '#008300', contour: '#004d00', tirets: null,          icone: 'file-signature' },
+    { id: 'concurrent', label: 'Mandat concurrent / vendu', court: 'Concurrent', couleur: '#e87ba4', couleurSombre: '#d55181', contour: '#a3335f', tirets: '8 3 2 3 2 3', icone: 'store' }
   ];
-  var ORDRE_GRAPHIQUE = ['prospectus', 'absent', 'contact', 'rappeler', 'refus'];
-  // Ordre des boutons de choix et des raccourcis clavier 1 à 6
-  var ORDRE_CHOIX = ['prospectus', 'contact', 'absent', 'rappeler', 'refus', 'aucun'];
+  // Ordre d'empilement des graphiques = ordre validé de la palette (ne pas changer sans revalider)
+  var ORDRE_GRAPHIQUE = ['prospectus', 'absent', 'contact', 'estimation', 'concurrent', 'mandat', 'rappeler', 'refus'];
+  // Ordre des boutons de choix et des raccourcis clavier 1 à 9
+  var ORDRE_CHOIX = ['prospectus', 'contact', 'absent', 'rappeler', 'refus', 'estimation', 'mandat', 'concurrent', 'aucun'];
+  // Statuts qui supposent qu'on a parlé à quelqu'un (taux de contact, entonnoir)
+  var CONTACTS = ['contact', 'rappeler', 'estimation', 'mandat'];
+
+  // Qualification du contact : valeurs possibles (id -> libellé)
+  var QUALIF = {
+    occupant: { titre: 'Occupant', valeurs: [['proprietaire', 'Propriétaire'], ['locataire', 'Locataire']] },
+    projet: { titre: 'Projet', valeurs: [['vente', 'Vente'], ['achat', 'Achat'], ['location', 'Mise en location'], ['succession', 'Succession'], ['estimation', 'Simple estimation'], ['aucun', 'Aucun projet']] },
+    echeance: { titre: 'Échéance', valeurs: [['3m', 'Moins de 3 mois'], ['6m', '3 à 6 mois'], ['12m', '6 à 12 mois'], ['plus', 'Plus d\'un an']] },
+    potentiel: { titre: 'Potentiel', valeurs: [['chaud', 'Chaud'], ['tiede', 'Tiède'], ['froid', 'Froid']] }
+  };
+  function libelleQualif(champ, v) {
+    var q = QUALIF[champ]; if (!q || !v) return '';
+    var t = q.valeurs.filter(function (x) { return x[0] === v; })[0];
+    return t ? t[1] : '';
+  }
+  // Champs dont la présence justifie de garder une fiche même « non faite »
+  var CHAMPS_INFO = ['note', 'logements', 'nom', 'tel', 'historique', 'etiquettes', 'occupant', 'projet', 'echeance', 'potentiel'];
+
   var parId = {};
   LISTE.forEach(function (s) { parId[s.id] = s; });
 
-  var records = {};   // id -> { statut, date, note, logements, nom, tel, historique: [{ statut, date }] }
+  var records = {};   // id -> fiche (voir en-tête)
   var manuels = {};   // id -> { lat, lon }
   var adresses = {};  // id -> adresse trouvée par géocodage inverse
   var pile = [];      // opérations annulables : { avant: { id: copie|null } }
@@ -60,7 +82,7 @@ var Statuts = (function () {
   // Supprime l'enregistrement s'il n'apporte plus aucune information
   function nettoyer(id) {
     var r = records[id];
-    if (r && (r.statut || 'aucun') === 'aucun' && !r.note && !r.logements && !r.nom && !r.tel && !(r.historique && r.historique.length)) delete records[id];
+    if (r && (r.statut || 'aucun') === 'aucun' && !CHAMPS_INFO.some(function (k) { return Array.isArray(r[k]) ? r[k].length : r[k]; })) delete records[id];
   }
 
   /*
@@ -68,13 +90,22 @@ var Statuts = (function () {
    * Si le statut change et qu'aucune date n'est fournie, la date/heure courante est posée.
    */
   function modifier(ids, patch) {
+    var patchs = {};
+    ids.forEach(function (id) { patchs[id] = patch; });
+    return modifierChacun(patchs);
+  }
+
+  // Applique un changement différent à chaque maison ({ id: patch }) en une seule opération annulable
+  function modifierChacun(patchs) {
     var avant = {}, modifies = [];
-    ids.forEach(function (id) {
+    Object.keys(patchs).forEach(function (id) {
+      var patch = patchs[id];
       var ancien = records[id];
       var r = copie(ancien) || {};
       var statutAvant = r.statut || 'aucun';
       Object.keys(patch).forEach(function (k) {
-        if (patch[k] === undefined || patch[k] === '' || patch[k] === null) delete r[k]; else r[k] = patch[k];
+        var v = patch[k];
+        if (v === undefined || v === '' || v === null || (Array.isArray(v) && !v.length)) delete r[k]; else r[k] = Array.isArray(v) ? v.slice() : v;
       });
       var statutChange = patch.statut !== undefined && (patch.statut || 'aucun') !== statutAvant;
       if (statutChange && patch.date === undefined) {
@@ -173,8 +204,8 @@ var Statuts = (function () {
 
   return {
     charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
-    LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, parId: function (id) { return parId[id] || parId.aucun; },
-    get: get, statutDe: statutDe, modifier: modifier, annuler: annuler, peutAnnuler: peutAnnuler,
+    LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, CONTACTS: CONTACTS, QUALIF: QUALIF, libelleQualif: libelleQualif, parId: function (id) { return parId[id] || parId.aucun; },
+    get: get, statutDe: statutDe, modifier: modifier, modifierChacun: modifierChacun, annuler: annuler, peutAnnuler: peutAnnuler,
     surChangement: surChangement, maintenant: maintenant,
     ajouterManuel: ajouterManuel, supprimerManuel: supprimerManuel,
     manuels: function () { return manuels; },

@@ -25,7 +25,7 @@ var Echange = (function () {
     return {
       app: 'SecteurImmo', schema: Store.SCHEMA, exporteLe: new Date().toISOString(),
       records: recs, manuels: man, adresses: adresses, batiments: batiments,
-      secteurs: Secteurs.exporter()
+      secteurs: Secteurs.exporter(), etiquettes: Etiquettes.exporter()
     };
   }
 
@@ -42,6 +42,13 @@ var Echange = (function () {
       if (Number.isInteger(r.logements) && r.logements > 0 && r.logements < 10000) o.logements = r.logements;
       if (typeof r.nom === 'string' && r.nom.trim()) o.nom = r.nom.trim().slice(0, 120);
       if (typeof r.tel === 'string' && /^[0-9+().\s-]{3,40}$/.test(r.tel.trim())) o.tel = r.tel.trim();
+      if (Array.isArray(r.etiquettes)) {
+        var et = r.etiquettes.filter(function (x) { return typeof x === 'string' && x.length <= 40; }).slice(0, 20);
+        if (et.length) o.etiquettes = et;
+      }
+      Object.keys(Statuts.QUALIF).forEach(function (champ) {
+        if (r[champ] && Statuts.libelleQualif(champ, r[champ])) o[champ] = r[champ];
+      });
       if (Array.isArray(r.historique)) {
         var h = r.historique.filter(function (x) { return x && valides[x.statut] && typeof x.date === 'string' && x.date.length <= 32; })
           .slice(-30).map(function (x) { return { statut: x.statut, date: x.date }; });
@@ -60,6 +67,7 @@ var Echange = (function () {
         propre.batiments.push({ type: 'Feature', id: f.id, properties: f.properties && typeof f.properties === 'object' ? f.properties : {}, geometry: f.geometry });
       } else propre.ignores++;
     });
+    propre.etiquettes = Etiquettes.nettoyer(d.etiquettes);
     var sec = Secteurs.nettoyer(d.secteurs);
     propre.secteurs = sec.donnees; propre.ignores += sec.ignores;
     return propre;
@@ -92,15 +100,17 @@ var Echange = (function () {
   // ids : sélection facultative (sinon tous les bâtiments ayant un statut)
   function construireCsv(ids) {
     var recs = Statuts._records(), adr = Statuts.adressesToutes();
-    var lignes = [['id', 'adresse', 'nom', 'telephone', 'statut', 'date', 'note', 'logements', 'latitude', 'longitude']];
+    var lignes = [['id', 'adresse', 'nom', 'telephone', 'statut', 'date', 'potentiel', 'projet', 'echeance', 'occupant', 'etiquettes', 'note', 'logements', 'latitude', 'longitude']];
     (ids || Object.keys(recs)).slice().sort().forEach(function (id) {
       if (!recs[id]) return;
       var r = recs[id], c = CarteImmo.centre(id), f = DataImmo.batiment(id);
       var a = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
-      lignes.push([id, a, r.nom || '', r.tel || '', Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '), r.note || '', r.logements || '',
+      var q = function (champ) { return Statuts.libelleQualif(champ, r[champ]); };
+      lignes.push([id, a, r.nom || '', r.tel || '', Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '),
+        q('potentiel'), q('projet'), q('echeance'), q('occupant'), (r.etiquettes || []).map(Etiquettes.nom).filter(Boolean).join(', '), r.note || '', r.logements || '',
         c ? c[0].toFixed(6) : '', c ? c[1].toFixed(6) : '']);
     });
-    return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 7 && i <= 9); }).join(';'); }).join('\r\n') + '\r\n';
+    return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 12 && i <= 14); }).join(';'); }).join('\r\n') + '\r\n';
   }
 
   function exporterCsv(ids) {
@@ -175,6 +185,7 @@ var Echange = (function () {
     Store.enregistrerBatiments(propre.batiments);
     var bilan = Statuts.charger(propre, mode, mode === 'remplacer');
     Secteurs.charger(propre.secteurs, mode);
+    if (propre.etiquettes.length || mode === 'remplacer') Etiquettes.charger(propre.etiquettes, mode === 'remplacer' && propre.etiquettes.length ? 'remplacer' : 'fusionner');
     CarteImmo.afficherBatiments(propre.batiments);
     CarteImmo.synchroniserManuels(Statuts.manuels());
     Object.keys(Statuts._records()).forEach(CarteImmo.rafraichir);
@@ -248,6 +259,20 @@ var Echange = (function () {
     }
   }
 
+  // État du stockage persistant (protection contre l'effacement automatique par le navigateur)
+  function majStockage() {
+    Store.etatStockage().then(function (e) {
+      var bloc = document.getElementById('etat-stockage'), b = document.getElementById('btn-proteger');
+      var taille = e.usage !== null ? ' Espace utilisé : ' + (e.usage / 1048576).toFixed(1).replace('.', ',') + ' Mo.' : '';
+      bloc.classList.toggle('ko', e.gere && !e.persiste);
+      document.getElementById('etat-stockage-titre').textContent = !e.gere ? 'Stockage standard' : e.persiste ? 'Stockage protégé' : 'Stockage non protégé';
+      document.getElementById('etat-stockage-texte').textContent = (!e.gere ? 'Ce navigateur ne permet pas de protéger le stockage : exportez régulièrement.'
+        : e.persiste ? 'Le navigateur ne supprimera pas vos données, même si l\'espace disque manque.'
+        : 'Le navigateur peut effacer vos données si l\'espace disque manque.') + taille;
+      b.hidden = !e.gere || e.persiste;
+    });
+  }
+
   var rappelSignale = false;
   function majRappel() {
     var aDesDonnees = Object.keys(Statuts._records()).length || Object.keys(Statuts.manuels()).length;
@@ -276,7 +301,13 @@ var Echange = (function () {
     handleLie = options.fichierLie || null;
     if (handleLie) etatLie = 'à vérifier';
 
-    Coquille.enregistrer('donnees', { ouvrir: function () { majEtat(); majRappel(); } });
+    Coquille.enregistrer('donnees', { ouvrir: function () { majEtat(); majRappel(); majStockage(); } });
+    document.getElementById('btn-proteger').addEventListener('click', function () {
+      Store.demanderPersistance().then(function (ok) {
+        Notif.afficher(ok ? 'Stockage protégé : vos données ne seront pas effacées par le navigateur.' : 'Le navigateur a refusé la protection. Installer l\'application ou l\'utiliser régulièrement aide ; exportez en attendant.', { type: ok ? 'succes' : 'alerte', duree: 7000 });
+        majStockage();
+      });
+    });
     document.getElementById('btn-export-json').addEventListener('click', exporterJson);
     document.getElementById('btn-export-csv').addEventListener('click', function () { exporterCsv(); });
     depot.addEventListener('click', function () { fichier.click(); });

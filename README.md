@@ -55,8 +55,8 @@ La pastille en bas de la carte guide : *« Zoomez pour afficher les maisons »* 
 | Outil | Raccourci | Effet |
 |---|---|---|
 | **Consulter** | `V` | Toucher une maison ouvre sa fiche. |
-| **Tournée rapide** | `T` | Un statut est actif (choisi dans le bandeau ou avec `1`…`6`) ; chaque maison touchée le reçoit, avec une onde colorée, une vibration sur téléphone et « Annuler ». |
-| **Sélection multiple** | `S` | Entourez des maisons (rectangle ou lasso), puis appliquez un statut à toutes. |
+| **Tournée rapide** | `T` | Un statut « de porte » est actif (choisi dans le bandeau ou avec les touches `1`…`9`) ; chaque maison touchée le reçoit, avec une onde colorée, une vibration sur téléphone et « Annuler ». |
+| **Sélection multiple** | `S` | Entourez des maisons (rectangle ou lasso), puis appliquez un statut ou une étiquette à toutes. |
 | **Ajouter** | `A` | Placez une maison absente d'OpenStreetMap. |
 | **Annuler** | `Ctrl Z` | Annule la dernière modification. |
 
@@ -64,13 +64,24 @@ La pastille en bas de la carte guide : *« Zoomez pour afficher les maisons »* 
 
 ### La fiche d'une maison
 
-Statut en un geste (touches `1` à `6`), date et heure du dernier passage, **nom et téléphone** (bouton d'appel direct), nombre de logements, note, **historique des passages**, et **« Maison suivante à faire »** quand la maison appartient à un secteur. Si OpenStreetMap ne connaît pas l'adresse, elle est cherchée une fois à l'ouverture de la fiche (géocodage IGN).
+- **Statut** en un geste (touches `1` à `9`) ;
+- **étiquettes** rapides à cocher (voir plus bas) ;
+- date et heure du dernier passage, **nom et téléphone** (bouton d'appel direct), nombre de logements ;
+- **qualification du contact** : potentiel (*chaud*, *tiède*, *froid*), projet (vente, achat, mise en location, succession, simple estimation, aucun), échéance (moins de 3 mois → plus d'un an), occupant (propriétaire / locataire) ; un second clic efface la valeur ;
+- note, **historique des passages**, et **« Maison suivante à faire »** quand la maison appartient à un secteur.
 
-Statuts : *Prospectus déposé* (bleu, contour tireté), *Contact personnel* (vert), *Absent / à repasser* (orange), *Refus / Stop pub* (rouge), *À rappeler* (violet), *Non fait* (gris). Chaque statut a une couleur, un style de contour et une icône (à fort zoom) : il reste lisible sans distinguer les couleurs.
+Si OpenStreetMap ne connaît pas l'adresse, elle est cherchée une fois à l'ouverture de la fiche (géocodage IGN).
+
+**Statuts de porte** : *Prospectus déposé* (bleu, contour tireté), *Contact personnel* (vert), *Absent / à repasser* (orange), *Refus / Stop pub* (rouge), *À rappeler* (violet), *Non fait* (gris).
+**Statuts commerciaux** : *Estimation faite* (jaune), *Mandat signé* (vert foncé), *Mandat concurrent / vendu* (rose). Chaque statut a une couleur, un style de contour et une icône (à fort zoom) : il reste lisible sans distinguer les couleurs. Les 8 couleurs forment une palette validée pour les daltoniens (clair et sombre).
+
+### Étiquettes
+
+Repères rapides que vous créez vous-même (6 proposées au départ : *Stop pub*, *Chien*, *Maison à vendre*, *Travaux*, *Volets fermés*, *Boîte pleine*). Dans la fiche, touchez une étiquette pour la poser ou l'enlever, ou **« Nouvelle »** pour en créer une (posée aussitôt). **Gérer les étiquettes** (roue dentée de la fiche, ou `Ctrl K` → « Gérer les étiquettes ») : renommer, changer la couleur, supprimer (retirée de toutes les maisons, après confirmation). En sélection multiple, *« Ajouter une étiquette… »* l'applique à toutes les maisons entourées (une seule annulation suffit).
 
 ### La légende (en bas à gauche)
 
-Compteurs par statut, avancement des maisons chargées, et filtre : touchez un statut pour le masquer ou l'afficher.
+Compteurs par statut, avancement des maisons chargées. Touchez un statut pour le masquer ou l'afficher, et utilisez le **filtre** pour n'afficher que les maisons d'un **potentiel**, d'un **projet** ou d'une **étiquette** (ex. « Potentiel chaud » pour préparer vos relances).
 
 ## Secteurs, rappels, bilan
 
@@ -85,19 +96,22 @@ Compteurs par statut, avancement des maisons chargées, et filtre : touchez un s
 
 ### Rappels
 
-Les maisons « À rappeler », de la plus ancienne demande à la plus récente (en orange au-delà de 7 jours), avec le nom, la note, **Appeler** (si un numéro est renseigné), **Fiche**, et **Contacté** (la passe en « Contact personnel », avec « Annuler »).
+Les maisons « À rappeler », triées de la plus ancienne demande à la plus récente (en orange au-delà de 7 jours) ou par **potentiel**, avec le nom, la qualification (potentiel, projet, échéance), la note, **Appeler** (si un numéro est renseigné), **Fiche**, et **Contacté** (la passe en « Contact personnel », avec « Annuler »).
 
 ### Bilan
 
 Tableau de bord filtrable par **période** (7, 30, 90 jours, tout) et par **secteur** :
-- **indicateurs** : maisons faites, taux de contact (contacts ÷ maisons faites), contacts personnels, à rappeler — **comparés à la période précédente** ;
+- **indicateurs** : maisons faites, **taux de contact** (personnes rencontrées ÷ maisons faites ; un contact, un rappel, une estimation ou un mandat comptent comme « rencontrée »), **estimations**, **mandats signés** — comparés à la période précédente ;
 - **objectif de la semaine** (modifiable, 80 maisons par défaut), maisons faites aujourd'hui, **série** de jours d'activité ;
 - **activité** : colonnes empilées par statut, par jour ou par semaine, infobulle et tableau des valeurs ;
-- **répartition** par statut, avancement des **secteurs**, **rues à terminer** ;
-- **journal des passages** : recherche (nom, adresse, note, téléphone), filtre par statut, tri, export CSV de la sélection ; un clic ouvre la maison sur la carte ;
-- **Données d'exemple** : jeu fictif pour découvrir le bilan, jamais enregistré, sans effet sur vos données.
+- **entonnoir commercial** : portes → contacts → estimations → mandats, avec le taux de passage entre chaque étape et les mandats perdus face à la concurrence (l'historique compte : une maison passée par « estimation » puis « mandat » compte dans les deux) ;
+- **meilleurs créneaux** : taux de contact par jour de la semaine et moment de la journée (matin, midi, après-midi, soir), calculé sur chaque passage de l'historique, avec votre meilleur créneau mis en avant (à partir de 5 portes) ;
+- **prospects à travailler** : potentiels chauds puis tièdes, les échéances les plus proches d'abord, avec appel direct ;
+- **rappels** (en attente, en retard, les plus anciens), **répartition** par statut, **projets et échéances**, **étiquettes** posées, avancement des **secteurs**, **rues à terminer** ;
+- **journal des passages** : recherche (nom, adresse, note, téléphone, projet, étiquette), filtres par statut et par qualification ou étiquette, tri, export CSV de la sélection ; un clic ouvre la maison sur la carte ;
+- **Données d'exemple** : jeu fictif d'environ 300 maisons pour découvrir le bilan, jamais enregistré, sans effet sur vos données.
 
-La date retenue pour une maison est celle de son **dernier changement de statut** (l'historique complet est dans la fiche).
+La date retenue pour une maison dans l'activité est celle de son **dernier changement de statut** (l'historique complet est dans la fiche, et sert à l'entonnoir et aux créneaux).
 
 ## Sur le terrain (téléphone)
 
@@ -109,9 +123,10 @@ La date retenue pour une maison est celle de son **dernier changement de statut*
 ## Sauvegarde, export, import
 
 Panneau **Données** :
-- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, objectif, maisons chargées, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
-- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 3 ; les sauvegardes des versions précédentes restent importables).
-- **Tableur (CSV)** : `id ; adresse ; nom ; telephone ; statut ; date ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
+- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, qualifications, étiquettes, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, objectif, maisons chargées, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
+- **Stockage protégé** : dès la première maison renseignée, l'application demande au navigateur de ne jamais effacer ses données, même si l'espace disque manque (`navigator.storage.persist()`). Chrome et Edge l'accordent en général sans rien demander (surtout si l'application est installée ou utilisée souvent) ; Firefox peut afficher une demande d'autorisation. L'état (protégé ou non, espace utilisé) est affiché dans **Données**, avec un bouton **Protéger** si besoin.
+- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 4 ; les sauvegardes des versions précédentes restent importables).
+- **Tableur (CSV)** : `id ; adresse ; nom ; telephone ; statut ; date ; potentiel ; projet ; echeance ; occupant ; etiquettes ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
 - **Importer** (glisser-déposer ou clic) : aperçu, puis **Fusionner** (en cas de doublon, la version la plus récente est gardée) ou **Remplacer** (avec, par défaut, une copie de sécurité de vos données actuelles). Le fichier est validé et nettoyé.
 - **Fichier lié** (Chrome / Edge) : réécrit automatiquement après chaque modification ; à reconnecter après un redémarrage du navigateur.
 - **Effacer toutes mes données** (avec confirmation).
@@ -132,7 +147,8 @@ Pratique pour installer l'application sur téléphone en `https://`. Le workflow
 - **Données OpenStreetMap** : certaines maisons manquent, beaucoup n'ont pas d'adresse, un immeuble est un seul bâtiment (utilisez « Ajouter » et le champ « Logements »).
 - **Overpass** est un service public gratuit, limité par adresse IP : en cas d'indisponibilité, réessayez plus tard.
 - **Clavier / lecteur d'écran** : les maisons sont dessinées sur un canevas et ne sont pas atteignables une à une au clavier ; utilisez la recherche (`Ctrl K`, par nom ou adresse), **Secteurs → Suivante** ou **Bilan → Journal**, qui ouvrent la fiche.
-- **Performance** : testé avec 6 000 maisons affichées. Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent).
+- **Performance** : testé avec 6 000 maisons affichées. Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent). Les scripts sont chargés en parallèle (`defer`), les bibliothèques servies depuis le cache, et le flou des panneaux est suspendu pendant les déplacements de la carte.
+- **Meilleurs créneaux** : calculés sur vos propres passages ; avec peu de données, les pourcentages varient beaucoup (les cases de moins de 3 portes sont grisées, le « meilleur créneau » demande au moins 5 portes).
 - **Non vérifié en conditions réelles** : le développement s'est fait dans un environnement dont le réseau bloquait OpenStreetMap, l'IGN et Overpass ; leur comportement (CORS, limites, champ `distance` du géocodage inverse, tuiles IGN) a été testé avec des réponses simulées, comme le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
 
 ## FAQ
@@ -154,14 +170,14 @@ Aucun build, aucun npm pour l'application : des scripts classiques (pas de modul
 ```
 index.html  manifest.json  sw.js  lancer.bat  lancer.sh
 css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau
-js/    pwa · theme · ui · notifications · geocode · data · statuts · map · coquille · carte-ui · panneau
+js/    pwa · theme · ui · notifications · geocode · data · statuts · etiquettes · map · coquille · carte-ui · etiquettes-ui · panneau
        position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · outils · palette · store · echange · aide · app
 vendor/ leaflet 1.9.4 (BSD-2) · lucide (icônes, ISC, sous-ensemble en sprite SVG) · inter (police variable, SIL OFL)
 icons/  icônes de l'application installée
 tests/  tests de bout en bout (Playwright) – non publiés
 ```
 
-- **Modèle** : `statuts.js` (fiches, historique, annulation) · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
+- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
 - **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `notifications.js` · `theme.js`.
 - **Design** : jetons (couleurs, rayons, ombres, mouvements) dans `css/tokens.css`, thème posé sur `<html data-theme>`. Les couleurs des statuts forment une palette catégorielle validée pour les daltoniens (clair et sombre).
 - **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION`), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.

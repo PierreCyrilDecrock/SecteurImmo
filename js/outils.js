@@ -47,9 +47,12 @@ var Outils = (function () {
     return t;
   }
 
-  function puces(actif, onChoix) {
+  // seulsPorte : en tournée, seuls les statuts « de porte » sont proposés (les numéros restent ceux de la fiche)
+  var PORTE = ['prospectus', 'contact', 'absent', 'rappeler', 'refus', 'aucun'];
+  function puces(actif, onChoix, seulsPorte) {
     var g = el('div', 'choix-statuts compacts');
     Statuts.ORDRE_CHOIX.forEach(function (sid, i) {
+      if (seulsPorte && PORTE.indexOf(sid) < 0) return;
       var st = Statuts.parId(sid);
       var b = Ui.boutonStatut(st, sid === actif, function () { onChoix(sid); }, i + 1);
       b.querySelector('.libelle').textContent = st.court;
@@ -67,7 +70,7 @@ var Outils = (function () {
 
     if (mode === 'tournee') {
       contexte.appendChild(teteContexte('zap', 'Tournée rapide', 'Touchez chaque maison faite'));
-      contexte.appendChild(puces(statutTournee, function (sid) { statutTournee = sid; setMode('tournee'); }));
+      contexte.appendChild(puces(statutTournee, function (sid) { statutTournee = sid; setMode('tournee'); }, PORTE.indexOf(statutTournee) >= 0));
     } else if (mode === 'ajouter') {
       contexte.appendChild(teteContexte('map-pin-plus', 'Ajouter une maison', 'Touchez la carte à son emplacement'));
     } else if (mode === 'selection') {
@@ -87,6 +90,22 @@ var Outils = (function () {
           quitterSelection(); dessinerContexte();
         }));
         var a = el('div', 'actions'); a.style.marginTop = '8px';
+        // Ajouter une étiquette à toutes les maisons sélectionnées
+        if (Etiquettes.liste().length) {
+          var sel = el('select', 'saisie saisie-sm'); sel.id = 'selection-etiquette'; sel.setAttribute('aria-label', 'Ajouter une étiquette à la sélection');
+          var o0 = el('option', null, 'Ajouter une étiquette…'); o0.value = ''; sel.appendChild(o0);
+          Etiquettes.liste().forEach(function (e) { var o = el('option', null, e.nom); o.value = e.id; sel.appendChild(o); });
+          sel.addEventListener('change', function () {
+            var eid = sel.value; if (!eid) return;
+            var ids = idsSelection.filter(function (id) { return ((Statuts.get(id) || {}).etiquettes || []).indexOf(eid) < 0; });
+            var patchs = {};
+            ids.forEach(function (id) { patchs[id] = { etiquettes: ((Statuts.get(id) || {}).etiquettes || []).concat([eid]) }; });
+            Statuts.modifierChacun(patchs);
+            Notif.afficher('« ' + Etiquettes.nom(eid) + ' » ajoutée à ' + ids.length + ' maison' + (ids.length > 1 ? 's' : ''), { type: 'succes' });
+            quitterSelection(); dessinerContexte();
+          });
+          a.appendChild(sel);
+        }
         a.appendChild(Ui.bouton('Désélectionner', 'btn btn-sm btn-fantome', function () { quitterSelection(); dessinerContexte(); }, { id: 'btn-desel' }));
         contexte.appendChild(a);
       }
@@ -202,7 +221,7 @@ var Outils = (function () {
     if (Coquille.vue() !== 'carte') return;
     var modes = { v: 'consulter', t: 'tournee', s: 'selection', a: 'ajouter' };
     if (modes[k.toLowerCase()]) { setMode(modes[k.toLowerCase()]); return; }
-    if (/^[1-6]$/.test(k)) {
+    if (/^[1-9]$/.test(k)) {
       var sid = Statuts.ORDRE_CHOIX[+k - 1];
       if (Panneau.ouvert()) Panneau.choisir(sid);
       else if (mode === 'tournee') { statutTournee = sid; setMode('tournee'); }

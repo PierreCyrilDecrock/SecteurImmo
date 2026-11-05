@@ -99,6 +99,15 @@ var CarteUi = (function () {
       });
       corps.appendChild(b);
     });
+    // Filtre : n'afficher que les maisons ayant une étiquette, un potentiel ou un projet donnés
+    var ligneFiltre = Ui.el('label', 'filtre-legende');
+    ligneFiltre.appendChild(Ui.icone('list-filter', 'ic-sm'));
+    var sel = Ui.el('select', 'saisie'); sel.id = 'filtre-carte'; sel.setAttribute('aria-label', 'Filtrer les maisons affichées');
+    ligneFiltre.appendChild(sel);
+    corps.appendChild(ligneFiltre);
+    sel.addEventListener('change', function () { appliquerFiltre(sel.value); });
+    filtreSelect = sel;
+    majFiltres();
     var av = Ui.el('div', 'avancement-carte');
     var st = Ui.el('div', 'sous-titre'); st.appendChild(Ui.el('span', null, 'Avancement')); st.appendChild(Ui.el('strong', 'pct num', '0 %'));
     av.appendChild(st);
@@ -113,6 +122,40 @@ var CarteUi = (function () {
     replier(memo === null ? Coquille.telephone() : memo === '1');
     tete.addEventListener('click', function () { replier(!legende.classList.contains('repliee')); });
     majLegende();
+  }
+
+  // ---------- Filtre de la légende ----------
+  var filtreSelect = null;
+  function majFiltres() {
+    if (!filtreSelect) return;
+    var v = filtreSelect.value;
+    filtreSelect.innerHTML = '';
+    function opt(val, txt, parent) { var o = Ui.el('option', null, txt); o.value = val; (parent || filtreSelect).appendChild(o); }
+    opt('', 'Toutes les maisons');
+    var g1 = Ui.el('optgroup'); g1.label = 'Potentiel';
+    Statuts.QUALIF.potentiel.valeurs.forEach(function (x) { opt('potentiel:' + x[0], 'Potentiel ' + x[1].toLowerCase(), g1); });
+    filtreSelect.appendChild(g1);
+    var g2 = Ui.el('optgroup'); g2.label = 'Projet';
+    Statuts.QUALIF.projet.valeurs.filter(function (x) { return x[0] !== 'aucun'; }).forEach(function (x) { opt('projet:' + x[0], x[1], g2); });
+    filtreSelect.appendChild(g2);
+    if (Etiquettes.liste().length) {
+      var g3 = Ui.el('optgroup'); g3.label = 'Étiquette';
+      Etiquettes.liste().forEach(function (e) { opt('etiquette:' + e.id, e.nom, g3); });
+      filtreSelect.appendChild(g3);
+    }
+    filtreSelect.value = v;
+    if (filtreSelect.value !== v) appliquerFiltre('');
+  }
+  function appliquerFiltre(v) {
+    if (filtreSelect) filtreSelect.value = v;
+    legende.classList.toggle('filtre-actif', !!v);
+    if (!v) { CarteImmo.definirFiltre(null); return; }
+    var champ = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':') + 1);
+    CarteImmo.definirFiltre(function (id) {
+      var r = Statuts.get(id);
+      if (!r) return false;
+      return champ === 'etiquette' ? (r.etiquettes || []).indexOf(val) >= 0 : r[champ] === val;
+    });
   }
 
   // ---------- Accueil (aucune maison encore chargée) ----------
@@ -136,11 +179,16 @@ var CarteUi = (function () {
     var barre = document.getElementById('progression');
     DataImmo.surActivite(function (v) { barre.classList.toggle('active', v); });
     map.on('moveend zoomend', function () { majPastille(); majAccueil(); });
+    // Suspend le flou des panneaux flottants pendant les déplacements (fluidité, surtout sur téléphone)
+    var scene = document.getElementById('scene');
+    map.on('movestart zoomstart', function () { scene.classList.add('en-mouvement'); });
+    map.on('moveend zoomend', function () { scene.classList.remove('en-mouvement'); });
     document.getElementById('accueil-chercher').addEventListener('click', function () { Palette.ouvrir(); });
     Statuts.surChangement(majLegende);
+    Etiquettes.surChangement(majFiltres);
     CarteImmo.surElements(function () { clearTimeout(majLegende.t); majLegende.t = setTimeout(function () { majLegende(); majAccueil(); }, 60); });
     majPastille(); majAccueil();
   }
 
-  return { init: init, majLegende: majLegende, majPastille: majPastille, charger: charger, majAccueil: majAccueil };
+  return { init: init, majLegende: majLegende, appliquerFiltre: appliquerFiltre, majPastille: majPastille, charger: charger, majAccueil: majAccueil };
 })();

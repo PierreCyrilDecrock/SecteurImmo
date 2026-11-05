@@ -48,7 +48,8 @@ var Stats = (function () {
       var rue = (f && f.properties['addr:street'] ? f.properties['addr:street'].replace(/[\s,]*\b\d{5}\b.*$/, '').trim() : '') || rueDe(adr[id]);
       return {
         id: id, statut: r.statut || 'aucun', date: r.date || '', note: r.note || '', logements: r.logements || 0,
-        nom: r.nom || '', tel: r.tel || '',
+        nom: r.nom || '', tel: r.tel || '', historique: r.historique || [], etiquettes: r.etiquettes || [],
+        occupant: r.occupant || '', projet: r.projet || '', echeance: r.echeance || '', potentiel: r.potentiel || '',
         adresse: texteAdr, rue: rue || '', secteurs: secteursDe[id] || [], lat: c ? c[0] : null, lon: c ? c[1] : null
       };
     });
@@ -62,26 +63,47 @@ var Stats = (function () {
 
   function elementsDemo() {
     var rnd = mulberry32(42);
-    var rues = ['Rue des Lilas', 'Avenue du Parc', 'Impasse des Écoles', 'Rue Victor Hugo', 'Allée des Tilleuls', 'Rue du Moulin', 'Chemin des Vignes', 'Rue de la Gare'];
+    var choisir = function (t) { return t[Math.floor(rnd() * t.length)]; };
+    var rues = ['Rue des Lilas', 'Avenue du Parc', 'Impasse des Écoles', 'Rue Victor Hugo', 'Allée des Tilleuls', 'Rue du Moulin', 'Chemin des Vignes', 'Rue de la Gare', 'Rue Pasteur', 'Allée des Peupliers', 'Rue Jean Jaurès', 'Chemin du Lavoir'];
     var secteurs = ['demo-centre', 'demo-lilas'];
-    var notes = ['', '', '', 'Propriétaire intéressé par une estimation', 'Rappeler après 18 h', 'Vend dans 2 ans', 'Locataire', 'A déjà un agent', 'Succession en cours', 'Veut un avis de valeur'];
+    var notes = ['', '', 'Propriétaire intéressé par une estimation', 'Rappeler après 18 h', 'Vend dans 2 ans', 'A déjà un agent', 'Succession en cours', 'Veut un avis de valeur', 'Enfants partis, maison trop grande'];
     var noms = ['M. Martin', 'Mme Bernard', 'M. et Mme Petit', 'Mme Durand', 'M. Leroy', 'Mme Moreau', 'M. Lefèvre', 'Mme Garnier'];
-    var statutsFaits = ['prospectus', 'prospectus', 'prospectus', 'contact', 'contact', 'absent', 'absent', 'refus', 'rappeler'];
+    var tags = ['e-stop-pub', 'e-chien', 'e-a-vendre', 'e-travaux', 'e-volets', 'e-boite'];
     var auj = aujourdhui(), items = [], n = 0;
+    function horodatage(j, h) { return jourDe(ajouterJours(auj, -j)) + 'T' + pad(h) + ':' + pad(Math.floor(rnd() * 60)); }
     rues.forEach(function (rue, k) {
-      var nb = 14 + Math.floor(rnd() * 12), avancement = 0.35 + rnd() * 0.65;
+      var nb = 18 + Math.floor(rnd() * 14), avancement = 0.35 + rnd() * 0.65;
       for (var i = 1; i <= nb; i++) {
-        var fait = rnd() < avancement, st = 'aucun', date = '';
-        if (fait) {
-          st = statutsFaits[Math.floor(rnd() * statutsFaits.length)];
-          var d = ajouterJours(auj, -Math.floor(Math.pow(rnd(), 1.5) * 60));
-          date = jourDe(d) + 'T' + pad(9 + Math.floor(rnd() * 10)) + ':' + pad(Math.floor(rnd() * 60));
+        var e = { id: 'demo/' + (++n), statut: 'aucun', date: '', note: '', nom: '', tel: '', historique: [], etiquettes: [], occupant: '', projet: '', echeance: '', potentiel: '',
+          logements: rnd() < 0.1 ? 2 + Math.floor(rnd() * 6) : 0, adresse: i + ' ' + rue, rue: rue, secteurs: [secteurs[k % 2]], lat: null, lon: null };
+        if (rnd() < avancement) {
+          // Passage : jour et heure ; on trouve plus souvent quelqu'un en fin de journée et le samedi
+          var j = Math.floor(Math.pow(rnd(), 1.5) * 60), h = 9 + Math.floor(rnd() * 11);
+          var jour = ajouterJours(auj, -j).getDay();
+          var chance = 0.22 + (h >= 17 ? 0.25 : 0) + (jour === 6 ? 0.15 : 0) - (h >= 12 && h < 14 ? 0.08 : 0);
+          var t = horodatage(j, h);
+          if (rnd() < chance) {
+            var r = rnd();
+            var st = r < 0.5 ? 'contact' : r < 0.7 ? 'rappeler' : r < 0.85 ? 'estimation' : r < 0.93 ? 'mandat' : 'concurrent';
+            e.historique.push({ statut: st === 'concurrent' ? 'contact' : (st === 'rappeler' || st === 'contact' ? st : 'contact'), date: t });
+            if (st === 'estimation' || st === 'mandat') e.historique.push({ statut: 'estimation', date: horodatage(Math.max(0, j - 4), 10 + Math.floor(rnd() * 8)) });
+            if (st === 'mandat') e.historique.push({ statut: 'mandat', date: horodatage(Math.max(0, j - 9), 10 + Math.floor(rnd() * 8)) });
+            if (st === 'concurrent') e.historique.push({ statut: 'concurrent', date: horodatage(Math.max(0, j - 12), 11) });
+            e.statut = st; e.date = e.historique[e.historique.length - 1].date;
+            e.nom = rnd() < 0.75 ? choisir(noms) : '';
+            e.tel = e.nom && rnd() < 0.6 ? '06 ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) : '';
+            e.note = choisir(notes);
+            e.occupant = rnd() < 0.8 ? 'proprietaire' : 'locataire';
+            e.potentiel = st === 'mandat' || st === 'estimation' ? choisir(['chaud', 'chaud', 'tiede']) : choisir(['chaud', 'tiede', 'tiede', 'froid', 'froid', '']);
+            e.projet = e.potentiel ? choisir(['vente', 'vente', 'vente', 'estimation', 'succession', 'achat', 'aucun']) : '';
+            e.echeance = e.projet && e.projet !== 'aucun' ? choisir(['3m', '6m', '6m', '12m', 'plus']) : '';
+          } else {
+            e.statut = choisir(['prospectus', 'prospectus', 'prospectus', 'absent', 'absent', 'refus']);
+            e.date = t; e.historique.push({ statut: e.statut, date: t });
+          }
+          if (rnd() < 0.18) e.etiquettes.push(choisir(tags));
         }
-        var note = (st === 'contact' || st === 'rappeler') ? notes[Math.floor(rnd() * notes.length)] : '';
-        var nom = (st === 'contact' || st === 'rappeler') && rnd() < 0.7 ? noms[Math.floor(rnd() * noms.length)] : '';
-        var tel = nom && rnd() < 0.6 ? '06 ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) + ' ' + pad(Math.floor(rnd() * 100)) : '';
-        items.push({ id: 'demo/' + (++n), statut: st, date: date, note: note, nom: nom, tel: tel, logements: rnd() < 0.1 ? 2 + Math.floor(rnd() * 6) : 0,
-          adresse: i + ' ' + rue, rue: rue, secteurs: [secteurs[k % 2]], lat: null, lon: null });
+        items.push(e);
       }
     });
     return items;
@@ -105,11 +127,85 @@ var Stats = (function () {
 
   function chiffres(items) {
     var par = {}; Statuts.LISTE.forEach(function (s) { par[s.id] = 0; });
-    var logements = 0;
-    items.forEach(function (e) { par[e.statut]++; if (e.statut !== 'aucun') logements += e.logements || 1; });
+    var logements = 0, contacts = 0;
+    items.forEach(function (e) {
+      par[e.statut]++;
+      if (e.statut !== 'aucun') logements += e.logements || 1;
+      if (Statuts.CONTACTS.indexOf(e.statut) >= 0) contacts++;
+    });
     var total = items.length, faits = total - par.aucun;
-    return { total: total, faits: faits, aFaire: par.aucun, par: par, logements: logements,
-      tauxContact: faits ? Math.round(1000 * par.contact / faits) / 10 : null };
+    return { total: total, faits: faits, aFaire: par.aucun, par: par, logements: logements, contacts: contacts,
+      tauxContact: faits ? Math.round(1000 * contacts / faits) / 10 : null };
+  }
+
+  // ---------- Entonnoir commercial : portes → contacts → estimations → mandats ----------
+  // Une étape est « atteinte » si le statut actuel OU un passage de l'historique l'a atteinte.
+  function atteint(e, statuts) {
+    return statuts.indexOf(e.statut) >= 0 || (e.historique || []).some(function (h) { return statuts.indexOf(h.statut) >= 0; });
+  }
+  function entonnoir(items) {
+    var faits = items.filter(function (e) { return e.statut !== 'aucun'; });
+    var etapes = [
+      { id: 'faits', libelle: 'Portes faites', n: faits.length },
+      { id: 'contacts', libelle: 'Contacts', n: faits.filter(function (e) { return atteint(e, Statuts.CONTACTS); }).length },
+      { id: 'estimations', libelle: 'Estimations', n: faits.filter(function (e) { return atteint(e, ['estimation', 'mandat']); }).length },
+      { id: 'mandats', libelle: 'Mandats signés', n: faits.filter(function (e) { return atteint(e, ['mandat']); }).length }
+    ];
+    etapes.forEach(function (x, i) {
+      x.pctPrecedent = i && etapes[i - 1].n ? Math.round(100 * x.n / etapes[i - 1].n) : null;
+      x.pctTotal = etapes[0].n ? Math.round(1000 * x.n / etapes[0].n) / 10 : null;
+    });
+    return { etapes: etapes, concurrents: faits.filter(function (e) { return e.statut === 'concurrent'; }).length };
+  }
+
+  // ---------- Meilleurs créneaux : taux de contact par jour de la semaine et moment de la journée ----------
+  var JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  var MOMENTS = [['Matin', 'avant 12 h'], ['Midi', '12 h – 14 h'], ['Après-midi', '14 h – 17 h'], ['Soir', 'après 17 h']];
+  function moment(h) { return h < 12 ? 0 : h < 14 ? 1 : h < 17 ? 2 : 3; }
+  function creneaux(items, periode) {
+    var debut = periode ? jourDe(ajouterJours(aujourdhui(), -(periode - 1))) : '';
+    var grille = JOURS.map(function () { return MOMENTS.map(function () { return { portes: 0, contacts: 0 }; }); });
+    var total = 0;
+    items.forEach(function (e) {
+      // Chaque passage compte (historique) ; à défaut, le dernier statut et sa date
+      var passages = e.historique && e.historique.length ? e.historique : (e.statut !== 'aucun' && e.date ? [{ statut: e.statut, date: e.date }] : []);
+      passages.forEach(function (p) {
+        if (!p.date || p.date.length < 13 || (debut && p.date.slice(0, 10) < debut)) return;
+        if (['estimation', 'mandat', 'concurrent'].indexOf(p.statut) >= 0) return;   // étapes de suivi, pas des passages à la porte
+        var d = dateDepuisJour(p.date.slice(0, 10)), c = grille[(d.getDay() + 6) % 7][moment(+p.date.slice(11, 13))];
+        c.portes++; total++;
+        if (Statuts.CONTACTS.indexOf(p.statut) >= 0) c.contacts++;
+      });
+    });
+    var meilleur = null;
+    grille.forEach(function (ligne, j) { ligne.forEach(function (c, m) {
+      c.taux = c.portes ? c.contacts / c.portes : null;
+      if (c.portes >= 5 && (!meilleur || c.taux > meilleur.taux)) meilleur = { jour: j, moment: m, taux: c.taux, portes: c.portes };
+    }); });
+    return { grille: grille, total: total, meilleur: meilleur, jours: JOURS, moments: MOMENTS };
+  }
+
+  // ---------- Qualification et étiquettes ----------
+  function qualification(items) {
+    var r = {};
+    Object.keys(Statuts.QUALIF).forEach(function (champ) {
+      r[champ] = {};
+      items.forEach(function (e) { if (e[champ]) r[champ][e[champ]] = (r[champ][e[champ]] || 0) + 1; });
+    });
+    return r;
+  }
+  function etiquettes(items) {
+    var c = {};
+    items.forEach(function (e) { (e.etiquettes || []).forEach(function (t) { c[t] = (c[t] || 0) + 1; }); });
+    return c;
+  }
+  // Prospects à travailler : potentiel chaud ou tiède, pas encore signés ni perdus ; les plus urgents d'abord
+  function prospects(items) {
+    var rangPot = { chaud: 0, tiede: 1 }, rangEch = { '3m': 0, '6m': 1, '12m': 2, plus: 3 };
+    return items.filter(function (e) { return (e.potentiel === 'chaud' || e.potentiel === 'tiede') && ['mandat', 'concurrent', 'refus'].indexOf(e.statut) < 0; })
+      .sort(function (a, b) {
+        return (rangPot[a.potentiel] - rangPot[b.potentiel]) || ((a.echeance ? rangEch[a.echeance] : 9) - (b.echeance ? rangEch[b.echeance] : 9)) || (a.date < b.date ? 1 : -1);
+      });
   }
 
   // ---------- Série temporelle ----------
@@ -170,7 +266,9 @@ var Stats = (function () {
       var j = e.date ? e.date.slice(0, 10) : '';
       return e.statut !== 'aucun' && j && j >= debut && j <= fin;
     });
-    return chiffres(sel);
+    var c = chiffres(sel);
+    c.elements = sel;
+    return c;
   }
 
   // Jours d'affilée avec au moins une maison faite (jusqu'à aujourd'hui, ou hier si rien aujourd'hui)
@@ -197,6 +295,7 @@ var Stats = (function () {
   }
 
   return {
+    entonnoir: entonnoir, creneaux: creneaux, qualification: qualification, etiquettes: etiquettes, prospects: prospects,
     precedente: precedente, rythme: rythme,
     rueDe: rueDe, elementsReels: elementsReels, elementsDemo: elementsDemo, nomsDemo: NOMS_DEMO,
     filtrer: filtrer, chiffres: chiffres, serie: serie, rues: rues,

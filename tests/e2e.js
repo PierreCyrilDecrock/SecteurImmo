@@ -239,7 +239,7 @@ rubrique('Sauvegarde, export, import', async (env) => {
   let [dl] = await Promise.all([p.waitForEvent('download'), p.click('#btn-export-json')]);
   const fj = path.join(TMP, 'export.json'); await dl.saveAs(fj);
   const ex = JSON.parse(fs.readFileSync(fj, 'utf8'));
-  ok(ex.schema === 3 && ex.records['way/100'].tel === '+33 6 12 34 56 78' && ex.records['way/100'].historique.length === 1 && ex.secteurs.secteurs.length === 1, 'export JSON (schéma 3 : contact, historique, secteurs)');
+  ok(ex.schema === 4 && Array.isArray(ex.etiquettes) && ex.records['way/100'].tel === '+33 6 12 34 56 78' && ex.records['way/100'].historique.length === 1 && ex.secteurs.secteurs.length === 1, 'export JSON (schéma 4 : contact, historique, étiquettes, secteurs)');
   [dl] = await Promise.all([p.waitForEvent('download'), p.click('#btn-export-csv')]);
   const fc = path.join(TMP, 'export.csv'); await dl.saveAs(fc);
   const csv = fs.readFileSync(fc, 'utf8'), lignes = csv.split('\r\n');
@@ -277,45 +277,64 @@ rubrique('Bilan (tableau de bord)', async (env) => {
   const p = await page(env, { batiments: grille(3, 4, 500, ['Rue des Lilas', 'Rue du Parc', null]) });
   await chargerZone(p);
   await p.evaluate(() => {
-    const d = n => Stats.jourDe(new Date(Date.now() - n * 86400000)) + 'T10:00';
-    Statuts.modifier(['way/500'], { statut: 'contact', date: d(1) });
-    Statuts.modifier(['way/501'], { statut: 'contact', date: d(2), note: 'Intéressé par estimation' });
-    Statuts.modifier(['way/502'], { statut: 'prospectus', date: d(1) });
-    Statuts.modifier(['way/503'], { statut: 'prospectus', date: d(3) });
-    Statuts.modifier(['way/504'], { statut: 'rappeler', date: d(5), nom: 'Mme Petit' });
-    Statuts.modifier(['way/506'], { statut: 'absent', date: d(10) });
-    Statuts.modifier(['way/507'], { statut: 'refus', date: d(40) });
-    Statuts.modifier(['way/508'], { statut: 'rappeler', date: d(20), note: 'Estimation succession' });
+    const d = (n, h) => Stats.jourDe(new Date(Date.now() - n * 86400000)) + 'T' + (h || '10') + ':00';
+    const M = (id, p) => Statuts.modifier([id], p);
+    M('way/500', { statut: 'contact', date: d(1) });
+    M('way/501', { statut: 'contact', date: d(2), note: 'Intéressé par estimation' });
+    M('way/502', { statut: 'prospectus', date: d(1) });
+    M('way/503', { statut: 'prospectus', date: d(3) });
+    M('way/504', { statut: 'rappeler', date: d(5), nom: 'Mme Petit', potentiel: 'tiede', projet: 'succession' });
+    M('way/506', { statut: 'absent', date: d(10) });
+    M('way/507', { statut: 'refus', date: d(40) });
+    M('way/508', { statut: 'rappeler', date: d(20), note: 'Estimation succession' });
+    M('way/509', { statut: 'contact', date: d(30, 18) }); M('way/509', { statut: 'estimation', date: d(4), nom: 'M. Martin', potentiel: 'chaud', projet: 'vente', echeance: '3m', etiquettes: ['e-a-vendre'] });
+    M('way/510', { statut: 'contact', date: d(50, 18) }); M('way/510', { statut: 'estimation', date: d(45) }); M('way/510', { statut: 'mandat', date: d(6) });
+    M('way/511', { statut: 'contact', date: d(25, 18) }); M('way/511', { statut: 'concurrent', date: d(12) });
   });
   const avant = await p.evaluate(() => JSON.stringify(Statuts._records()));
   await p.click('.rail [data-nav=tableau]');
   await p.waitForSelector('.kpi');
   const kpis = async () => (await p.locator('.kpi .kpi-valeur').allInnerTexts());
   await p.click('.segments [data-periode="0"]');
-  ok((await kpis()).join('|') === '8|25 %|2|2', 'indicateurs (tout) : 8 faites, 25 % de contact, 2 contacts, 2 à rappeler');
+  ok((await kpis()).join('|') === '11|54,5 %|2|1', 'indicateurs (tout) : 11 faites, 54,5 % de contact, 2 estimations, 1 mandat (' + (await kpis()).join('|') + ')');
+  const etapes = await p.locator('.entonnoir .etape strong').allInnerTexts();
+  ok(etapes.join('|') === '11|7|2|1', 'entonnoir : 11 portes → 7 contacts → 2 estimations → 1 mandat (historique pris en compte)');
+  ok(/1 perdu face à la concurrence/.test(await p.locator('.bloc:has-text("Entonnoir")').innerText()), 'entonnoir : mandats perdus face à la concurrence');
   await p.click('.segments [data-periode="7"]');
-  ok((await kpis()).join('|') === '5|40 %|2|1', 'filtre 7 jours : 5 faites, 40 %');
+  ok((await kpis()).join('|') === '7|71,4 %|2|1', 'filtre 7 jours : 7 faites, 71,4 % (' + (await kpis()).join('|') + ')');
   ok(await p.locator('.kpi .ecart').count() >= 2, 'comparaison avec la période précédente');
   await p.click('.segments [data-periode="0"]');
-  ok(await p.locator('.graphique .segment').count() === 8, 'activité : un segment par statut et par jour');
+  ok(await p.locator('.graphique .segment').count() === 11, 'activité : un segment par statut et par jour');
   await p.locator('.graphique .zone').nth(await p.locator('.graphique .zone').count() - 2).hover();
   ok(await p.locator('#info-graphique').isVisible(), 'infobulle au survol du graphique');
-  ok((await p.locator('.liste-repartition li').allInnerTexts()).length === 6, 'répartition (anneau + liste)');
+  ok((await p.locator('.liste-repartition li').allInnerTexts()).length === 9, 'répartition (anneau + liste des 9 statuts)');
+  ok(await p.locator('.carte-chaleur tbody tr').count() === 7 && /Soir/.test(await p.locator('.carte-chaleur thead').innerText()), 'meilleurs créneaux : grille jours × moments');
+  const prospects = await p.locator('.liste-prospects:not(.compacte) .lien-ligne').allInnerTexts();
+  ok(prospects.join() === 'M. Martin,Mme Petit', 'prospects à travailler : chaud avant tiède (' + prospects.join() + ')');
+  ok(/2\s*à rappeler/.test((await p.locator('.bloc:has-text("Rappels")').innerText()).replace(/\n/g, ' ')), 'rappels : nombre et plus anciens');
+  ok(/Vente/.test(await p.locator('.bloc:has-text("Projets")').innerText()) && /Succession/.test(await p.locator('.bloc:has-text("Projets")').innerText()), 'projets et échéances');
+  ok(/Maison à vendre/.test(await p.locator('.bloc:has-text("Étiquettes")').innerText()), 'étiquettes posées');
   ok(/Rue du Parc/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()) && !/Rue des Lilas/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()), 'rues à terminer (rue terminée exclue)');
   const deborde = async () => p.evaluate(() => [...document.querySelectorAll('#tableau .bloc')].reduce((n, b) => {
     const d = b.getBoundingClientRect().right;
-    return n + [...b.querySelectorAll('.jauge, .haut span, .haut strong, .kpi-valeur')].filter(e => e.getBoundingClientRect().right > d + 0.5).length;
+    return n + [...b.querySelectorAll('.jauge, .haut span, .haut strong, .kpi-valeur, .etape, .carte-chaleur')].filter(e => e.getBoundingClientRect().right > d + 0.5).length;
   }, 0));
-  await p.evaluate(() => { const f = DataImmo.batiment('way/505'); f.properties['addr:street'] = 'Place Roger Salengro (Oullins) 69600 Oullins-Pierre-Bénite et environs'; });
-  await p.click('.segments [data-periode="7"]'); await p.click('.segments [data-periode="0"]');
-  ok(await deborde() === 0 && /Place Roger Salengro \(Oullins\)\s/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()) && !/69600/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()), 'nom de rue très long : tronqué, code postal retiré, rien ne déborde des cartes');
+  await p.evaluate(() => { const f = DataImmo.batiment('way/505'); f.properties['addr:street'] = 'Place Roger Salengro (Oullins) 69600 Oullins-Pierre-Bénite et environs'; StatsUi.ouvrir(); });
+  await p.waitForTimeout(200);
+  const nDeb = await deborde(), txtRues = await p.locator('.bloc:has-text("Rues à terminer")').innerText();
+  ok(nDeb === 0 && /Place Roger Salengro \(Oullins\)\s/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()) && !/69600/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()), 'nom de rue très long : tronqué, code postal retiré, rien ne déborde des cartes' + (nDeb ? ' (' + nDeb + ' débordement(s))' : '') + (/Salengro/.test(txtRues) ? '' : ' [' + txtRues.replace(/\n/g, ' / ') + ']'));
   // objectif
   await p.click('#objectif-modifier'); await p.fill('#objectif-saisie', '20'); await p.keyboard.press('Enter');
   ok(/sur 20/.test(await p.locator('.objectif').innerText()), 'objectif de la semaine modifiable');
   // journal
   await p.fill('#journal-recherche', 'estimation');
   ok(await p.locator('.tableau.liste tbody tr').count() === 2, 'journal : recherche dans les notes');
-  await p.fill('#journal-recherche', ''); await p.selectOption('#journal-statut', 'contact');
+  await p.fill('#journal-recherche', '');
+  await p.selectOption('#journal-qualif', 'potentiel:chaud');
+  ok(await p.locator('.tableau.liste tbody tr').count() === 1, 'journal : filtre par potentiel');
+  await p.selectOption('#journal-qualif', 'etiquettes:e-a-vendre');
+  ok(await p.locator('.tableau.liste tbody tr').count() === 1, 'journal : filtre par étiquette');
+  await p.selectOption('#journal-qualif', ''); await p.selectOption('#journal-statut', 'contact');
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#stats-export')]);
   const f = path.join(TMP, 'sel.csv'); await dl.saveAs(f);
   ok(fs.readFileSync(f, 'utf8').trim().split('\r\n').length === 3, 'journal : export CSV de la sélection (2 contacts)');
@@ -326,12 +345,126 @@ rubrique('Bilan (tableau de bord)', async (env) => {
   await p.click('.rail [data-nav=tableau]');
   await p.click('label:has(#stats-demo)');
   ok(await p.locator('#stats-demo-bandeau').isVisible() && Number((await kpis())[0].replace(/\s/g, '')) > 20, 'données d\'exemple affichées');
+  ok(await p.locator('.carte-chaleur td').count() === 28 && await p.locator('.conseil').count() === 1, 'exemple : créneaux et conseil « meilleur créneau »');
   ok(await p.evaluate(() => JSON.stringify(Statuts._records())) === avant, 'vos vraies données ne sont pas modifiées');
   await p.waitForTimeout(500);
   await recharger(p);
   await p.click('.rail [data-nav=tableau]');
   ok(/sur 20/.test(await p.locator('.objectif').innerText()), 'objectif conservé au rechargement');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
   await p.ctx.close();
+});
+
+rubrique('Étiquettes personnalisables', async (env) => {
+  const p = await page(env);
+  await chargerZone(p);
+  await clicMaison(p, 'way/100'); await p.waitForSelector('#panneau.ouverte');
+  ok(await p.locator('#panneau .puce[data-etiquette]').count() === 6, '6 étiquettes proposées au départ');
+  await p.click('#panneau .puce[data-etiquette="e-chien"]');
+  ok(JSON.stringify(await p.evaluate(() => Statuts.get('way/100').etiquettes)) === '["e-chien"]', 'une étiquette posée d\'un geste');
+  await p.click('#etiquette-nouvelle'); await p.keyboard.type('Jardin à l\'abandon'); await p.keyboard.press('Enter');
+  await p.waitForTimeout(200);
+  const e = await p.evaluate(() => Etiquettes.liste().filter(x => x.nom === "Jardin à l'abandon")[0]);
+  ok(!!e && (await p.evaluate(() => Statuts.get('way/100').etiquettes)).includes(e.id), 'création d\'une étiquette depuis la fiche (posée aussitôt)');
+  // gestion : renommer, supprimer
+  await p.click('#etiquettes-gerer'); await p.waitForSelector('#dlg-etiquettes[open]');
+  const champ = p.locator('#dlg-etiquettes li[data-etiquette="' + e.id + '"] input');
+  await champ.fill('Jardin négligé'); await champ.press('Tab');
+  ok(await p.evaluate((id) => Etiquettes.nom(id), e.id) === 'Jardin négligé', 'renommer une étiquette');
+  await p.locator('#dlg-etiquettes li[data-etiquette="e-chien"] [data-action=supprimer]').click();
+  await p.click('#confirmer-oui'); await p.waitForTimeout(200);
+  ok(!(await p.evaluate(() => Etiquettes.parId('e-chien'))) && !(await p.evaluate(() => Statuts.get('way/100').etiquettes)).includes('e-chien'), 'supprimer une étiquette la retire des maisons');
+  await p.keyboard.press('Escape'); await p.keyboard.press('Escape');
+  // sélection multiple : ajout d'une étiquette à plusieurs maisons
+  await p.keyboard.press('s');
+  const a = await pt(p, 'way/104'), z = await pt(p, 'way/111');
+  await p.mouse.move(Math.min(a.x, z.x) - 20, Math.min(a.y, z.y) - 20); await p.mouse.down();
+  await p.mouse.move(Math.max(a.x, z.x) + 20, Math.max(a.y, z.y) + 20, { steps: 8 }); await p.mouse.up();
+  await p.selectOption('#selection-etiquette', 'e-travaux');
+  ok(await p.evaluate(() => Object.values(Statuts._records()).filter(r => (r.etiquettes || []).includes('e-travaux')).length) === 8, 'sélection : étiquette ajoutée à 8 maisons');
+  await p.keyboard.press('Control+z');
+  ok(await p.evaluate(() => Object.values(Statuts._records()).filter(r => (r.etiquettes || []).includes('e-travaux')).length) === 0, 'une seule annulation suffit');
+  await p.keyboard.press('Control+y').catch(() => {});
+  await p.keyboard.press('Escape');
+  // filtre de la carte
+  await p.selectOption('#filtre-carte', 'etiquette:' + e.id);
+  const visibles = await p.evaluate(() => Object.keys(DataImmo._batiments()).filter(id => CarteImmo.getMap().hasLayer && document).length);
+  ok(await p.locator('.legende.filtre-actif').count() === 1, 'légende : filtre par étiquette actif');
+  ok(await p.evaluate(() => CarteImmo.idsDans(CarteImmo.getMap().getBounds()).join()) === 'way/100', 'carte : seule la maison portant l\'étiquette reste affichée');
+  await p.selectOption('#filtre-carte', '');
+  ok(await p.evaluate(() => CarteImmo.idsDans(CarteImmo.getMap().getBounds()).length) === 12, 'filtre retiré : toutes les maisons');
+  await p.waitForTimeout(800);
+  await recharger(p);
+  ok(await p.evaluate((id) => Etiquettes.nom(id), e.id) === 'Jardin négligé' && !(await p.evaluate(() => Etiquettes.parId('e-chien'))), 'étiquettes conservées au rechargement');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
+  await p.ctx.close();
+});
+
+rubrique('Statuts commerciaux et qualification', async (env) => {
+  const p = await page(env);
+  await chargerZone(p);
+  await clicMaison(p, 'way/100'); await p.waitForSelector('#panneau.ouverte');
+  ok(await p.locator('#panneau .choix-statut').count() === 9, 'fiche : 9 statuts (dont estimation, mandat, concurrent)');
+  await p.keyboard.press('2'); await p.keyboard.press('6'); await p.keyboard.press('7');
+  ok(await p.evaluate(() => Statuts.get('way/100').historique.map(h => h.statut).join()) === 'contact,estimation,mandat', 'touches 2, 6, 7 : contact → estimation → mandat (historique)');
+  await p.click('#panneau .puce[data-champ=potentiel][data-valeur=chaud]');
+  await p.click('#panneau .puce[data-champ=projet][data-valeur=vente]');
+  await p.click('#panneau .puce[data-champ=echeance][data-valeur="3m"]');
+  await p.click('#panneau .puce[data-champ=occupant][data-valeur=proprietaire]');
+  const r = await p.evaluate(() => Statuts.get('way/100'));
+  ok(r.potentiel === 'chaud' && r.projet === 'vente' && r.echeance === '3m' && r.occupant === 'proprietaire', 'qualification : potentiel, projet, échéance, occupant');
+  ok(/Potentiel chaud/.test(await p.locator('#panneau .fiche-chips').innerText()), 'potentiel affiché en tête de fiche');
+  await p.click('#panneau .puce[data-champ=occupant][data-valeur=proprietaire]');
+  ok(await p.evaluate(() => Statuts.get('way/100').occupant) === undefined, 'un second clic efface la valeur');
+  await p.keyboard.press('Escape');
+  await p.evaluate(() => Statuts.modifier(['way/101'], { statut: 'rappeler', potentiel: 'tiede', projet: 'achat' }));
+  await p.selectOption('#filtre-carte', 'potentiel:chaud');
+  ok(await p.evaluate(() => CarteImmo.idsDans(CarteImmo.getMap().getBounds()).join()) === 'way/100', 'carte : filtre « potentiel chaud »');
+  await p.selectOption('#filtre-carte', 'projet:achat');
+  ok(await p.evaluate(() => CarteImmo.idsDans(CarteImmo.getMap().getBounds()).join()) === 'way/101', 'carte : filtre par projet');
+  await p.selectOption('#filtre-carte', '');
+  await tiroir(p, 'rappels');
+  ok(/Tiède/.test(await p.locator('.carte-rappel').first().innerText()) && /Achat/.test(await p.locator('.carte-rappel').first().innerText()), 'rappels : potentiel et projet affichés');
+  await p.click('#tiroir-fermer');
+  // recherche (palette) par qualification
+  await p.keyboard.press('Control+k'); await p.keyboard.type('potentiel chaud'); await p.waitForTimeout(200);
+  ok(await p.locator('.palette-groupe:has-text("Maisons")').count() === 1, 'recherche : maisons trouvées par leur qualification');
+  await p.keyboard.press('Escape');
+  // export / import
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.evaluate(() => Echange.exporterCsv())]);
+  const f = path.join(TMP, 'q.csv'); await dl.saveAs(f);
+  const lignes = fs.readFileSync(f, 'utf8').split('\r\n');
+  ok(lignes[0].includes('potentiel;projet;echeance;occupant;etiquettes') && lignes.some(l => /Mandat signé;.*;Chaud;Vente;Moins de 3 mois/.test(l)), 'CSV : statut commercial et qualification');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
+  await p.ctx.close();
+});
+
+rubrique('Stockage persistant', async (env) => {
+  // Simulation de l'API : non protégé au départ, protection accordée à la demande
+  const ctx = await env.b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await ctx.addInitScript(() => {
+    window.__demandes = 0; let persiste = false;
+    navigator.storage.persisted = () => Promise.resolve(persiste);
+    navigator.storage.persist = () => { window.__demandes++; persiste = true; return Promise.resolve(true); };
+  });
+  const p = await page(env, { ctx });
+  ok(await p.evaluate(() => window.__demandes) === 0, 'pas de demande tant qu\'il n\'y a rien à protéger');
+  await chargerZone(p);
+  await p.evaluate(() => Statuts.modifier(['way/100'], { statut: 'contact' }));
+  await p.waitForTimeout(300);
+  ok(await p.evaluate(() => window.__demandes) === 1, 'protection demandée automatiquement à la première maison renseignée');
+  await tiroir(p, 'donnees');
+  await p.waitForTimeout(200);
+  ok(/Stockage protégé/.test(await p.locator('#etat-stockage').innerText()) && await p.locator('#btn-proteger').isHidden(), 'panneau Données : « Stockage protégé »');
+  await p.ctx.close();
+  const ctx2 = await env.b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await ctx2.addInitScript(() => { navigator.storage.persisted = () => Promise.resolve(false); navigator.storage.persist = () => Promise.resolve(false); });
+  const q = await page(env, { ctx: ctx2 });
+  await tiroir(q, 'donnees'); await q.waitForTimeout(200);
+  ok(/non protégé/.test(await q.locator('#etat-stockage').innerText()) && await q.locator('#btn-proteger').isVisible(), 'non protégé : explication et bouton « Protéger »');
+  await q.click('#btn-proteger'); await q.waitForTimeout(200);
+  ok(/refusé/.test(await notif(q)), 'refus du navigateur expliqué');
+  await q.ctx.close();
 });
 
 rubrique('Thème, téléphone, hors ligne, position', async (env) => {
@@ -362,6 +495,9 @@ rubrique('Thème, téléphone, hors ligne, position', async (env) => {
   ok(await m.locator('#tiroir.ouvert [data-section=donnees]').isVisible(), 'menu « Plus » → Données');
   await m.click('#voile', { position: { x: 200, y: 40 } });
   ok(await m.locator('#tiroir.ouvert').count() === 0, 'toucher le voile ferme la feuille');
+  await m.click('.rail [data-nav=tableau]'); await m.click('label:has(#stats-demo)'); await m.waitForTimeout(500);
+  ok(await m.evaluate(() => document.getElementById('tableau').scrollWidth - document.getElementById('tableau').clientWidth) === 0, 'bilan sur téléphone : aucun débordement horizontal');
+  await m.click('.rail [data-nav=carte]');
   ok(!m.erreurs.length, 'aucune erreur JavaScript sur téléphone');
   await m.ctx.close();
 

@@ -14,6 +14,8 @@
 
 /* Éléments flottants : verre dépoli */
 .verre { background: var(--verre); backdrop-filter: var(--flou); -webkit-backdrop-filter: var(--flou); border: 1px solid var(--bord); box-shadow: var(--ombre); }
+/* Pendant un déplacement de la carte, le flou d'arrière-plan (coûteux à recalculer) est suspendu */
+.scene.en-mouvement .verre { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--verre-fort); }
 .surcouche { position: absolute; z-index: 10; pointer-events: none; }
 .surcouche > * { pointer-events: auto; }
 .surcouche, .controles-carte, .legende { transition: left var(--t-lent) var(--ease), right var(--t-lent) var(--ease), opacity var(--t) var(--ease); }
@@ -70,7 +72,7 @@
 .pastille-charger.action { background: var(--primaire); color: var(--sur-primaire); border-color: var(--primaire); box-shadow: var(--ombre); }
 .pastille-charger.action:hover { background: var(--primaire-survol); }
 .pastille-charger.discret { color: var(--texte-2); }
-.pastille-charger.fait { color: var(--succes); cursor: default; }
+.pastille-charger.fait { color: var(--succes); cursor: default; pointer-events: none; }   /* simple information : ne gêne pas les clics */
 .pastille-charger .rond { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, .14); }
 .pastille-charger.discret .rond, .pastille-charger.fait .rond { background: var(--surface-3); }
 .pastille-charger.fait .rond { background: var(--succes-doux); }
@@ -91,18 +93,22 @@
 .outil .pastille-active { position: absolute; right: 7px; bottom: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--primaire); }
 
 /* ---------- Légende ---------- */
-.legende { position: absolute; z-index: 10; left: calc(16px + var(--decalage-g)); bottom: 18px; width: 236px; border-radius: var(--r-lg); overflow: hidden; }
+.legende { position: absolute; z-index: 10; left: calc(16px + var(--decalage-g)); bottom: 18px; width: 268px; border-radius: var(--r-lg); overflow: hidden; }
 .legende-tete { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 12px 11px 14px; border: 0; background: transparent; font-weight: 650; font-size: 13px; text-align: left; color: var(--texte); }
-.legende-tete .total { margin-left: auto; color: var(--texte-3); font-weight: 600; font-size: 12px; }
+.legende-tete .total { white-space: nowrap; margin-left: auto; color: var(--texte-3); font-weight: 600; font-size: 12px; }
 .legende-tete .chevron { transition: transform var(--t) var(--ease); color: var(--texte-3); }
 .legende.repliee .legende-tete .chevron { transform: rotate(-90deg); }
-.legende-corps { padding: 0 8px 8px; display: grid; gap: 2px; }
+.legende-corps { padding: 0 8px 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.legende-corps .filtre-legende, .legende-corps .avancement-carte { grid-column: 1 / -1; }
 .legende.repliee .legende-corps { display: none; }
-.ligne-legende { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; font-size: 13px; color: var(--texte); text-align: left; transition: background var(--t-rapide), opacity var(--t); }
+.ligne-legende { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: 30px; padding: 0 7px; white-space: nowrap; border: 0; border-radius: 8px; background: transparent; font-size: 13px; color: var(--texte); text-align: left; transition: background var(--t-rapide), opacity var(--t); }
 .ligne-legende:hover { background: var(--surface-survol); }
 .ligne-legende .compte { margin-left: auto; color: var(--texte-3); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
 .ligne-legende[aria-pressed="false"] { opacity: .45; }
 .ligne-legende[aria-pressed="false"] .pastille { background: transparent; box-shadow: inset 0 0 0 2px var(--c); }
+.filtre-legende { display: flex; align-items: center; gap: 8px; padding: 6px 8px 2px; color: var(--texte-3); }
+.filtre-legende .saisie { min-height: 32px; padding: 4px 30px 4px 10px; font-size: 12.5px; background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; }
+.legende.filtre-actif .legende-tete .total::before { content: 'Filtré · '; color: var(--accent); }
 .avancement-carte { padding: 4px 8px 6px; }
 .avancement-carte .jauge { height: 5px; margin-top: 6px; }
 .avancement-carte .sous-titre { display: flex; justify-content: space-between; }
@@ -162,7 +168,7 @@
   #grp-zoom { display: none; }
   .legende { left: 10px; top: calc(66px + env(safe-area-inset-top)); bottom: auto; width: auto; max-width: calc(100% - 76px); }
   .legende.repliee { width: auto; }
-  .legende:not(.repliee) { width: 236px; }
+  .legende:not(.repliee) { width: 268px; }
   .pile-bas { bottom: 10px; }
   .leaflet-bottom.leaflet-right { bottom: 76px; }   /* attribution visible au-dessus du dock */
   .dock { padding: 5px; gap: 2px; }

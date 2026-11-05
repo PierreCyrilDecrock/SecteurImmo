@@ -12,7 +12,7 @@ var StatsUi = (function () {
   var LIGNES_MAX = 50;
   var el = Ui.el, icone = Ui.icone;
   var racine, tip;
-  var etat = { demo: false, periode: 30, secteur: '', gran: 'jour', tri: 'date', ordre: -1, filtreStatut: '', recherche: '', lignes: LIGNES_MAX };
+  var etat = { demo: false, periode: 30, secteur: '', gran: 'jour', tri: 'date', ordre: -1, filtreStatut: '', filtreQualif: '', recherche: '', lignes: LIGNES_MAX };
   var objectif = 80;
   var tous = [], items = [], ouvert = false;
 
@@ -40,8 +40,12 @@ var StatsUi = (function () {
   }
 
   // ---------- Données ----------
+  // Les éléments ne sont recalculés que si les données ont changé (ou en basculant sur l'exemple)
+  var source = null;
+  function invalider() { source = null; }
   function charger() {
-    tous = etat.demo ? Stats.elementsDemo() : Stats.elementsReels();
+    var cle = etat.demo ? 'demo' : 'reel';
+    if (source !== cle) { tous = etat.demo ? Stats.elementsDemo() : Stats.elementsReels(); source = cle; }
     items = Stats.filtrer(tous, etat.periode, etat.secteur);
   }
 
@@ -99,18 +103,173 @@ var StatsUi = (function () {
     return k;
   }
   function indicateurs() {
-    var c = Stats.chiffres(items);
+    var c = Stats.chiffres(items), f = Stats.entonnoir(items).etapes;
     var prec = Stats.precedente(tous, etat.periode, etat.secteur);
+    var fp = prec ? Stats.entonnoir(prec.elements).etapes : null;
     var g = el('div', 'kpis');
     var vsTxt = prec ? 'vs ' + etat.periode + ' j précédents' : null;
+    var pct = function (v) { return String(Math.round(v * 10) / 10).replace('.', ',') + ' %'; };
     g.appendChild(kpi('house', 'var(--texte)', 'Maisons faites', c.faits, nombre,
       prec ? [ecart(c.faits, prec.faits), vsTxt] : ['sur ' + nombre(c.total) + ' maisons connues'], null, 0));
-    g.appendChild(kpi('message-circle', 'var(--st-contact)', 'Taux de contact', c.tauxContact, function (v) { return String(Math.round(v * 10) / 10).replace('.', ',') + ' %'; },
-      [prec && prec.tauxContact !== null && c.tauxContact !== null ? ecart(c.tauxContact, prec.tauxContact, ' pt', true) : null, 'contacts ÷ maisons faites'], null, 1));
-    g.appendChild(kpi('user', 'var(--st-contact)', 'Contacts personnels', c.par.contact, nombre, prec ? [ecart(c.par.contact, prec.par.contact), vsTxt] : [nombre(c.par.prospectus) + ' prospectus déposés'], null, 2));
-    g.appendChild(kpi('phone-call', 'var(--st-rappeler)', 'À rappeler', c.par.rappeler, nombre, ['Voir la liste', icone('arrow-right', 'ic-sm')],
-      etat.demo ? null : function () { Coquille.ouvrirTiroir('rappels'); }, 3));
+    g.appendChild(kpi('message-circle', 'var(--st-contact)', 'Taux de contact', c.tauxContact, pct,
+      [prec && prec.tauxContact !== null && c.tauxContact !== null ? ecart(c.tauxContact, prec.tauxContact, ' pt', true) : null, nombre(c.contacts) + ' personne' + (c.contacts > 1 ? 's' : '') + ' rencontrée' + (c.contacts > 1 ? 's' : '')], null, 1));
+    g.appendChild(kpi('calculator', 'var(--st-estimation)', 'Estimations', f[2].n, nombre,
+      fp ? [ecart(f[2].n, fp[2].n), vsTxt] : [f[1].n ? Math.round(100 * f[2].n / f[1].n) + ' % des contacts' : 'aucun contact'], null, 2));
+    g.appendChild(kpi('file-signature', 'var(--st-mandat)', 'Mandats signés', f[3].n, nombre,
+      fp ? [ecart(f[3].n, fp[3].n), vsTxt] : [f[2].n ? Math.round(100 * f[3].n / f[2].n) + ' % des estimations' : 'aucune estimation'], null, 3));
     return g;
+  }
+
+  // ---------- Entonnoir commercial ----------
+  function blocEntonnoir() {
+    var b = bloc('s5', 'Entonnoir commercial', 'funnel');
+    var e = Stats.entonnoir(items);
+    if (!e.etapes[0].n) { b.corps.appendChild(videBloc('Aucune maison faite sur cette période.', 'funnel')); return b.bloc; }
+    var max = e.etapes[0].n;
+    var ol = el('ol', 'entonnoir');
+    e.etapes.forEach(function (x, i) {
+      var li = el('li'); li.dataset.etape = x.id;
+      if (i) {
+        var conv = el('span', 'conversion'); conv.appendChild(icone('chevron-down', 'ic-sm'));
+        conv.appendChild(document.createTextNode(x.pctPrecedent === null ? '—' : x.pctPrecedent + ' %'));
+        conv.title = 'Taux de passage depuis l\'étape précédente';
+        li.appendChild(conv);
+      }
+      var l = el('div', 'etape');
+      var barre = el('div', 'etape-barre'); var r = el('span'); barre.appendChild(r);
+      requestAnimationFrame(function () { requestAnimationFrame(function () { r.style.width = Math.max(2, 100 * x.n / max) + '%'; }); });
+      l.appendChild(el('span', 'etape-nom', x.libelle)); l.appendChild(barre); l.appendChild(el('strong', 'num', nombre(x.n)));
+      li.appendChild(l); ol.appendChild(li);
+    });
+    b.corps.appendChild(ol);
+    var t = e.etapes[3].pctTotal;
+    b.corps.appendChild(el('p', 'sous-titre', (t === null ? '' : 'Soit ' + String(t).replace('.', ',') + ' % des portes transformées en mandat') + (e.concurrents ? ' · ' + e.concurrents + ' perdu' + (e.concurrents > 1 ? 's' : '') + ' face à la concurrence' : '')));
+    return b.bloc;
+  }
+
+  // ---------- Meilleurs créneaux ----------
+  function blocCreneaux() {
+    var b = bloc('s7', 'Meilleurs créneaux pour trouver quelqu\'un', 'clock');
+    var c = Stats.creneaux(tous.filter(function (e) { return !etat.secteur || e.secteurs.indexOf(etat.secteur) >= 0; }), etat.periode);
+    if (c.total < 10) { b.corps.appendChild(videBloc('Pas encore assez de passages (10 minimum) pour comparer les créneaux.', 'clock')); return b.bloc; }
+    if (c.meilleur) {
+      var m = el('p', 'conseil'); m.appendChild(icone('sparkles', 'ic-sm'));
+      var jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+      m.appendChild(document.createTextNode('Votre meilleur créneau : le ' + jours[c.meilleur.jour] + ' ' + c.moments[c.meilleur.moment][0].toLowerCase() + ' (' + Math.round(100 * c.meilleur.taux) + ' % de contact sur ' + c.meilleur.portes + ' portes).'));
+      b.corps.appendChild(m);
+    }
+    var tw = el('div', 'table-defilante sans-bord');
+    var t = el('table', 'carte-chaleur'); t.setAttribute('aria-label', 'Taux de contact par jour et moment de la journée');
+    var thead = el('thead'), h = el('tr'); h.appendChild(el('th'));
+    c.moments.forEach(function (mo) { var th = el('th', null, mo[0]); th.title = mo[1]; th.scope = 'col'; h.appendChild(th); });
+    thead.appendChild(h); t.appendChild(thead);
+    var tb = el('tbody');
+    c.grille.forEach(function (ligne, j) {
+      var tr = el('tr'); var th = el('th', null, c.jours[j]); th.scope = 'row'; tr.appendChild(th);
+      ligne.forEach(function (cell, mi) {
+        var td = el('td');
+        var assez = cell.portes >= 3;
+        var k = assez ? Math.round(10 + 75 * cell.taux) : 0;
+        td.style.setProperty('--k', k + '%');
+        td.className = assez ? (k > 52 ? 'fort' : '') : 'peu';
+        td.textContent = assez ? Math.round(100 * cell.taux) + ' %' : (cell.portes ? '·' : '');
+        td.title = c.jours[j] + ' ' + c.moments[mi][0].toLowerCase() + ' : ' + cell.portes + ' porte(s), ' + cell.contacts + ' contact(s)';
+        if (c.meilleur && c.meilleur.jour === j && c.meilleur.moment === mi) td.classList.add('meilleur');
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb); tw.appendChild(t); b.corps.appendChild(tw);
+    var leg = el('div', 'legende-chaleur'); leg.appendChild(el('span', null, 'Taux de contact :'));
+    leg.appendChild(el('span', 'degrade')); leg.appendChild(el('span', null, 'faible → élevé · « · » moins de 3 portes'));
+    b.corps.appendChild(leg);
+    return b.bloc;
+  }
+
+  // ---------- Prospects à relancer ----------
+  var POTENTIEL = { chaud: ['flame', '#dc2626'], tiede: ['thermometer', '#d97706'], froid: ['snowflake', '#2563eb'] };
+  function pucePotentiel(v) {
+    var s = el('span', 'etiquette-statut'); s.style.setProperty('--c', POTENTIEL[v][1]);
+    s.appendChild(icone(POTENTIEL[v][0])); s.appendChild(document.createTextNode(Statuts.libelleQualif('potentiel', v)));
+    return s;
+  }
+  function blocProspects() {
+    var ps = Stats.prospects(items);
+    var b = bloc('s8', 'Prospects à travailler', 'flame', el('span', 'sous-titre', ps.length ? ps.length + ' au total' : ''));
+    if (!ps.length) { b.corps.appendChild(videBloc('Qualifiez vos contacts (potentiel chaud ou tiède) dans la fiche pour les retrouver ici.', 'flame')); return b.bloc; }
+    var ul = el('ul', 'liste-prospects');
+    ps.slice(0, 7).forEach(function (e) {
+      var li = el('li');
+      li.appendChild(pucePotentiel(e.potentiel));
+      var tx = el('div', 'txt');
+      tx.appendChild(Ui.bouton(e.nom || e.adresse || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
+      tx.appendChild(el('span', 'sous-titre', [e.nom ? e.adresse : '', Statuts.libelleQualif('projet', e.projet), Statuts.libelleQualif('echeance', e.echeance)].filter(Boolean).join(' · ')));
+      li.appendChild(tx);
+      var es = Ui.etiquetteStatut(Statuts.parId(e.statut)); es.classList.add('statut-prospect'); li.appendChild(es);
+      if (e.tel) { var a = el('a', 'btn btn-sm btn-icone'); a.href = 'tel:' + e.tel.replace(/[^0-9+]/g, ''); a.setAttribute('aria-label', 'Appeler ' + (e.nom || '')); a.appendChild(icone('phone', 'ic-sm')); li.appendChild(a); }
+      ul.appendChild(li);
+    });
+    b.corps.appendChild(ul);
+    return b.bloc;
+  }
+
+  // ---------- Rappels ----------
+  function blocRappels() {
+    var b = bloc('s4', 'Rappels', 'bell');
+    var rs = items.filter(function (e) { return e.statut === 'rappeler'; });
+    var auj = Stats.aujourdhui();
+    var retard = rs.filter(function (e) { return e.date && (auj - Stats.dateDepuisJour(e.date.slice(0, 10))) / 86400000 > 7; }).length;
+    var g = el('div', 'mini-stats');
+    function mini(v, l, cls) { var d = el('div', 'mini-stat' + (cls ? ' ' + cls : '')); d.appendChild(el('strong', null, nombre(v))); d.appendChild(el('span', null, l)); return d; }
+    g.appendChild(mini(rs.length, 'à rappeler'));
+    g.appendChild(mini(retard, 'en retard (> 7 j)', retard ? 'alerte' : ''));
+    b.corps.appendChild(g);
+    // Les plus anciens en attente
+    var anciens = rs.filter(function (e) { return e.date; }).sort(function (x, y) { return x.date < y.date ? -1 : 1; }).slice(0, 4);
+    if (anciens.length) {
+      var ul = el('ul', 'liste-prospects compacte');
+      anciens.forEach(function (e) {
+        var li = el('li'), j = Math.round((auj - Stats.dateDepuisJour(e.date.slice(0, 10))) / 86400000);
+        var tx = el('div', 'txt');
+        tx.appendChild(Ui.bouton(e.nom || e.adresse || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
+        if (e.nom && e.adresse) tx.appendChild(el('span', 'sous-titre', e.adresse));
+        li.appendChild(tx);
+        li.appendChild(el('span', 'anciennete' + (j > 7 ? ' retard' : ''), j <= 0 ? 'auj.' : j + ' j'));
+        ul.appendChild(li);
+      });
+      b.corps.appendChild(ul);
+    }
+    if (!etat.demo && rs.length) { var bt = Ui.bouton(['Voir les rappels', icone('arrow-right', 'ic-sm')], 'btn btn-sm', function () { Coquille.ouvrirTiroir('rappels'); }); bt.style.marginTop = '12px'; b.corps.appendChild(bt); }
+    b.bloc.querySelector('.bloc-corps').style.display = 'grid'; b.bloc.querySelector('.bloc-corps').style.gap = '8px';
+    return b.bloc;
+  }
+
+  // ---------- Projets, échéances, étiquettes ----------
+  function blocProjets() {
+    var b = bloc('s4', 'Projets et échéances', 'briefcase');
+    var q = Stats.qualification(items);
+    var totalP = Object.keys(q.projet).reduce(function (t, k) { return t + q.projet[k]; }, 0);
+    if (!totalP && !Object.keys(q.echeance).length) { b.corps.appendChild(videBloc('Renseignez le projet et l\'échéance des personnes rencontrées (fiche → Qualification).', 'briefcase')); return b.bloc; }
+    var ul = el('ul', 'liste-barres');
+    Statuts.QUALIF.projet.valeurs.forEach(function (v) { var n = q.projet[v[0]] || 0; if (n) ul.appendChild(barre(v[1], Math.round(100 * n / totalP), nombre(n), 'var(--texte-3)')); });
+    b.corps.appendChild(ul);
+    var totalE = Object.keys(q.echeance).reduce(function (t, k) { return t + q.echeance[k]; }, 0);
+    if (totalE) {
+      var h = el('p', 'etiquette'); h.textContent = 'Échéance des projets'; h.style.margin = '14px 0 8px'; b.corps.appendChild(h);
+      var p = el('div', 'puces');
+      Statuts.QUALIF.echeance.valeurs.forEach(function (v) { var n = q.echeance[v[0]] || 0; if (n) { var x = el('span', 'puce statique'); x.appendChild(el('strong', 'num', String(n))); x.appendChild(document.createTextNode(v[1].toLowerCase())); p.appendChild(x); } });
+      b.corps.appendChild(p);
+    }
+    return b.bloc;
+  }
+  function blocEtiquettes() {
+    var b = bloc('s4', 'Étiquettes', 'tags');
+    var c = Stats.etiquettes(items), ids = Object.keys(c).sort(function (x, y) { return c[y] - c[x]; });
+    if (!ids.length) { b.corps.appendChild(videBloc('Aucune étiquette posée sur ces maisons.', 'tags')); return b.bloc; }
+    var max = c[ids[0]], ul = el('ul', 'liste-barres');
+    ids.slice(0, 7).forEach(function (id) { ul.appendChild(barre(Etiquettes.nom(id) || 'Étiquette supprimée', Math.round(100 * c[id] / max), nombre(c[id]), Etiquettes.couleur(id))); });
+    b.corps.appendChild(ul);
+    return b.bloc;
   }
 
   // ---------- Objectif de la semaine ----------
@@ -289,7 +448,7 @@ var StatsUi = (function () {
     return li;
   }
   function blocSecteurs() {
-    var b = bloc('s4', 'Secteurs', 'pentagon');
+    var b = bloc('s6', 'Secteurs', 'pentagon');
     if (etat.demo) {
       var ul0 = el('ul', 'liste-barres');
       Object.keys(Stats.nomsDemo).forEach(function (id) {
@@ -306,7 +465,7 @@ var StatsUi = (function () {
     return b.bloc;
   }
   function blocRues() {
-    var b = bloc('s4', 'Rues à terminer', 'route');
+    var b = bloc('s6', 'Rues à terminer', 'route');
     // L'avancement d'une rue est une couverture : on compte toutes les maisons (toute période)
     var rs = Stats.rues(Stats.filtrer(tous, 0, etat.secteur)).filter(function (r) { return r.nom && !r.termine; })
       .sort(function (a, c) { return (c.total - c.faits) - (a.total - a.faits) || a.nom.localeCompare(c.nom, 'fr'); });
@@ -337,7 +496,22 @@ var StatsUi = (function () {
     var o0 = el('option', null, 'Tous les statuts'); o0.value = ''; sel.appendChild(o0);
     Statuts.ORDRE_CHOIX.filter(function (x) { return x !== 'aucun'; }).forEach(function (sid) { var o = el('option', null, Statuts.parId(sid).label); o.value = sid; sel.appendChild(o); });
     sel.value = etat.filtreStatut; barreJ.appendChild(sel);
+    // Filtre par potentiel, projet ou étiquette
+    var selQ = el('select', 'saisie'); selQ.setAttribute('aria-label', 'Filtrer par qualification ou étiquette'); selQ.id = 'journal-qualif';
+    var q0 = el('option', null, 'Toutes les qualifications'); q0.value = ''; selQ.appendChild(q0);
+    function groupe(titre, valeurs) {
+      var g = el('optgroup'); g.label = titre;
+      valeurs.forEach(function (v) { var o = el('option', null, v[1]); o.value = v[0]; g.appendChild(o); });
+      selQ.appendChild(g);
+    }
+    groupe('Potentiel', Statuts.QUALIF.potentiel.valeurs.map(function (v) { return ['potentiel:' + v[0], 'Potentiel ' + v[1].toLowerCase()]; }));
+    groupe('Projet', Statuts.QUALIF.projet.valeurs.map(function (v) { return ['projet:' + v[0], v[1]]; }));
+    var tagsPresents = Object.keys(Stats.etiquettes(items));
+    if (tagsPresents.length) groupe('Étiquette', tagsPresents.map(function (t) { return ['etiquettes:' + t, Etiquettes.nom(t) || 'Étiquette supprimée']; }));
+    selQ.value = etat.filtreQualif; if (selQ.value !== etat.filtreQualif) etat.filtreQualif = '';
+    barreJ.appendChild(selQ);
     b.corps.appendChild(barreJ);
+    selQ.addEventListener('change', function () { etat.filtreQualif = selQ.value; etat.lignes = LIGNES_MAX; rendre(); });
     var zone = el('div'); b.corps.appendChild(zone);
     var selection = [];
     exp.disabled = etat.demo;
@@ -348,8 +522,11 @@ var StatsUi = (function () {
     function rendre() {
       zone.innerHTML = '';
       var q = etat.recherche.trim().toLowerCase();
+      var fq = etat.filtreQualif ? etat.filtreQualif.split(':') : null;
       selection = items.filter(function (e) {
-        return e.statut !== 'aucun' && (!etat.filtreStatut || e.statut === etat.filtreStatut) && (!q || (e.nom + ' ' + e.note + ' ' + e.adresse + ' ' + e.rue + ' ' + e.tel).toLowerCase().indexOf(q) >= 0);
+        if (fq && (fq[0] === 'etiquettes' ? (e.etiquettes || []).indexOf(fq[1]) < 0 : e[fq[0]] !== fq[1])) return false;
+        var texte = [e.nom, e.note, e.adresse, e.rue, e.tel, Statuts.libelleQualif('projet', e.projet)].concat((e.etiquettes || []).map(Etiquettes.nom)).join(' ').toLowerCase();
+        return e.statut !== 'aucun' && (!etat.filtreStatut || e.statut === etat.filtreStatut) && (!q || texte.indexOf(q) >= 0);
       });
       var cle = { date: function (e) { return e.date; }, adresse: function (e) { return (e.nom || e.adresse || '').toLowerCase(); }, statut: function (e) { return Statuts.parId(e.statut).label; } }[etat.tri];
       selection.sort(function (a, c) { var x = cle(a), y = cle(c); return (x < y ? -1 : x > y ? 1 : 0) * etat.ordre; });
@@ -357,7 +534,7 @@ var StatsUi = (function () {
       if (!selection.length) { zone.appendChild(videBloc('Aucun passage ne correspond.', 'inbox')); return; }
       var tw = el('div', 'table-defilante'); var tb = el('table', 'tableau liste');
       var h = el('tr');
-      [['date', 'Date'], ['adresse', 'Maison'], ['statut', 'Statut'], [null, 'Secteur'], [null, 'Note']].forEach(function (c) {
+      [['date', 'Date'], ['adresse', 'Maison'], ['statut', 'Statut'], [null, 'Qualification'], [null, 'Secteur'], [null, 'Note']].forEach(function (c) {
         var th = el('th'); th.scope = 'col';
         if (c[0]) {
           var bt = Ui.bouton([c[1], etat.tri === c[0] ? icone(etat.ordre > 0 ? 'chevron-down' : 'chevron-down', 'ic-sm') : null], 'tri');
@@ -377,6 +554,12 @@ var StatsUi = (function () {
         td.appendChild(lien); if (e.nom && e.adresse) { td.appendChild(document.createElement('br')); td.appendChild(el('span', 'sous-titre', e.adresse)); }
         tr.appendChild(td);
         var ts = el('td'); ts.appendChild(Ui.etiquetteStatut(Statuts.parId(e.statut))); tr.appendChild(ts);
+        var tq = el('td', 'qualif');
+        if (e.potentiel) tq.appendChild(pucePotentiel(e.potentiel));
+        var det = [Statuts.libelleQualif('projet', e.projet), Statuts.libelleQualif('echeance', e.echeance)].filter(Boolean).join(' · ');
+        if (det) tq.appendChild(el('span', 'sous-titre', det));
+        (e.etiquettes || []).forEach(function (t) { var x = el('span', 'mini-etiquette', Etiquettes.nom(t)); x.style.setProperty('--c', Etiquettes.couleur(t)); tq.appendChild(x); });
+        tr.appendChild(tq);
         tr.appendChild(el('td', null, e.secteurs.map(nomSecteur).filter(Boolean).join(', ')));
         tr.appendChild(el('td', 'note', e.note));
         body.appendChild(tr);
@@ -406,12 +589,8 @@ var StatsUi = (function () {
     }
     c.appendChild(indicateurs());
     var g = el('div', 'grille-tableau');
-    g.appendChild(blocObjectif());
-    g.appendChild(blocActivite());
-    g.appendChild(blocRepartition());
-    g.appendChild(blocSecteurs());
-    g.appendChild(blocRues());
-    g.appendChild(blocJournal());
+    [blocObjectif, blocActivite, blocEntonnoir, blocCreneaux, blocProspects, blocRappels,
+      blocRepartition, blocProjets, blocEtiquettes, blocSecteurs, blocRues, blocJournal].forEach(function (f) { g.appendChild(f()); });
     Array.prototype.forEach.call(g.children, function (x, i) { x.style.animationDelay = (150 + i * 50) + 'ms'; });
     c.appendChild(g);
     racine.appendChild(c);
@@ -423,14 +602,17 @@ var StatsUi = (function () {
     if (!silencieux) { Store.kvSet('objectif', objectif); Notif.afficher('Objectif : ' + objectif + ' maisons par semaine.', { type: 'succes', cle: 'objectif' }); }
   }
 
-  function ouvrir() { ouvert = true; racine.scrollTop = 0; dessiner(); }
+  function ouvrir() { ouvert = true; invalider(); racine.scrollTop = 0; dessiner(); }
   function fermer() { ouvert = false; if (tip) tip.hidden = true; }
 
   function init() {
     racine = document.getElementById('tableau'); tip = document.getElementById('info-graphique');
     var t = null;
     window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { if (ouvert) dessiner(); }, 250); });
-    Statuts.surChangement(function () { if (ouvert) { clearTimeout(t); t = setTimeout(dessiner, 150); } });
+    Statuts.surChangement(function () { invalider(); if (ouvert) { clearTimeout(t); t = setTimeout(dessiner, 150); } });
+    Etiquettes.surChangement(invalider);
+    Secteurs.surMaj(invalider);
+    CarteImmo.surElements(invalider);
   }
 
   return { init: init, ouvrir: ouvrir, fermer: fermer, definirObjectif: definirObjectif };

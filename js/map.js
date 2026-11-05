@@ -10,6 +10,7 @@ var CarteImmo = (function () {
   var ZOOM_ICONES = 18;     // les icônes de statut n'apparaissent qu'à fort zoom
   var elements = {};        // id -> { couche, centre: [lat, lon], icone, manuel, visible }
   var masques = {};         // statutId -> true si masqué par la légende
+  var filtreMaison = null;  // fonction(id) -> vrai si la maison reste affichée (filtre de la légende : étiquette, potentiel…)
   var selection = {};       // id -> true
   var evidence = {};        // id -> true : maisons à faire mises en évidence (secteurs)
   var ecouteursElements = []; // appelés quand des bâtiments sont ajoutés / retirés
@@ -106,7 +107,7 @@ var CarteImmo = (function () {
 
   function styleDe(id) {
     var st = Statuts.parId(Statuts.statutDe(id));
-    if (selection[id]) return { color: '#f59e0b', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.85, opacity: 1 };
+    if (selection[id]) return { color: document.documentElement.getAttribute('data-theme') === 'sombre' ? '#f8fafc' : '#0f172a', weight: 4, dashArray: null, fillColor: st.couleur, fillOpacity: 0.85, opacity: 1 };
     if (evidence[id]) return { color: '#db2777', weight: 3.5, dashArray: null, fillColor: st.couleur, fillOpacity: st.id === 'aucun' ? 0.5 : 0.8, opacity: 1 };
     if (st.id === 'aucun') return { color: '#64748b', weight: 1, dashArray: null, fillColor: '#94a3b8', fillOpacity: 0.32, opacity: 0.9 };
     return { color: st.contour, weight: 2, dashArray: st.tirets, fillColor: st.couleur, fillOpacity: 0.82, opacity: 1 };
@@ -132,7 +133,7 @@ var CarteImmo = (function () {
     var el = elements[id];
     if (!el) return;
     var statut = Statuts.statutDe(id);
-    var visible = !masques[statut];
+    var visible = !masques[statut] && (!filtreMaison || filtreMaison(id));
     el.couche.setStyle(styleDe(id));
     if (el.couche.isTooltipOpen && el.couche.isTooltipOpen()) el.couche.getTooltip().update();
     if (visible && !el.visible) { groupe.addLayer(el.couche); }
@@ -190,19 +191,28 @@ var CarteImmo = (function () {
     signalerElements();
   }
 
-  function signalerElements() { ecouteursElements.forEach(function (cb) { cb(); }); }
+  function signalerElements() { if (!enLot) ecouteursElements.forEach(function (cb) { cb(); }); }
   function surElements(cb) { ecouteursElements.push(cb); }
 
   // ---------- Ajout de bâtiments ----------
 
   // Ajoute des bâtiments (Features GeoJSON) sur la carte, sans doublon
+  // (polygone Leaflet direct, plus léger qu'une couche GeoJSON par maison ; un seul signal pour tout le lot)
+  var enLot = false;
   function afficherBatiments(features) {
-    features.forEach(function (f) {
-      if (elements[f.id]) return;
-      var couche = L.geoJSON(f);
-      var c = couche.getBounds().getCenter();
-      enregistrer(f.id, couche, [c.lat, c.lng], false);
-    });
+    enLot = true;
+    var n = 0;
+    try {
+      features.forEach(function (f) {
+        if (elements[f.id] || !f.geometry) return;
+        var g = f.geometry;
+        var couche = L.polygon(L.GeoJSON.coordsToLatLngs(g.coordinates, g.type === 'Polygon' ? 1 : 2));
+        var c = couche.getBounds().getCenter();
+        enregistrer(f.id, couche, [c.lat, c.lng], false);
+        n++;
+      });
+    } finally { enLot = false; }
+    if (n) signalerElements();
   }
 
   function afficherManuel(id, m) {
@@ -233,6 +243,12 @@ var CarteImmo = (function () {
   function synchroniserManuels(manuels) {
     Object.keys(elements).forEach(function (id) { if (elements[id].manuel && !manuels[id]) retirer(id); });
     Object.keys(manuels).forEach(function (id) { afficherManuel(id, manuels[id]); });
+  }
+
+  // Filtre supplémentaire (null = aucun) ; réapplique l'affichage de toutes les maisons
+  function definirFiltre(fn) {
+    filtreMaison = fn;
+    Object.keys(elements).forEach(appliquer);
   }
 
   function centre(id) { return elements[id] ? elements[id].centre : null; }
@@ -310,7 +326,7 @@ var CarteImmo = (function () {
     fonds: function () { return FONDS; }, fond: function () { return fondActif; }, setFond: setFond, surFond: function (cb) { ecouteursFond.push(cb); },
     afficherBatiments: afficherBatiments, afficherManuel: afficherManuel, retirer: retirer,
     definirSurClic: definirSurClic, filtrer: filtrer, centre: centre, total: total,
-    definirSurPrefs: definirSurPrefs, appliquerPrefs: appliquerPrefs, synchroniserManuels: synchroniserManuels,
+    definirFiltre: definirFiltre, definirSurPrefs: definirSurPrefs, appliquerPrefs: appliquerPrefs, synchroniserManuels: synchroniserManuels,
     idsDans: idsDans, dansPolygone: dansPolygone, mettreEnEvidence: mettreEnEvidence, tousCentres: tousCentres, surElements: surElements, surligner: surligner, rafraichir: appliquer
   };
 })();

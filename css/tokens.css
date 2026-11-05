@@ -52,6 +52,7 @@
   /* Statuts (palette catégorielle validée, voir js/statuts.js) */
   --st-aucun: #9aa5b1; --st-prospectus: #2a78d6; --st-contact: #1baf7a;
   --st-absent: #eb6834; --st-refus: #e34948; --st-rappeler: #6250d6;
+  --st-estimation: #eda100; --st-mandat: #008300; --st-concurrent: #e87ba4;
 
   /* Graphiques */
   --grille: #e5e7eb; --axe: #64748b;
@@ -102,6 +103,7 @@
   --alerte: #fbbf24; --alerte-doux: rgba(251, 191, 36, .12);
   --danger: #f87171; --danger-doux: rgba(248, 113, 113, .12);
   --st-prospectus: #3987e5; --st-contact: #199e70; --st-absent: #d95926; --st-refus: #e66767; --st-rappeler: #9085e9;
+  --st-estimation: #c98500; --st-mandat: #008300; --st-concurrent: #d55181;
   --grille: #263045; --axe: #94a3b8;
   --ombre-xs: 0 1px 2px rgba(0, 0, 0, .4);
   --ombre-sm: 0 1px 2px rgba(0, 0, 0, .35), 0 2px 8px rgba(0, 0, 0, .25);

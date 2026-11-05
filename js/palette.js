@@ -25,6 +25,7 @@ var Palette = (function () {
       { ic: 'file-spreadsheet', t: 'Exporter en tableur (CSV)', mots: 'exporter csv excel tableur', fn: function () { Echange.exporterCsv(); } },
       { ic: 'upload', t: 'Importer une sauvegarde', mots: 'importer restaurer json', fn: function () { Coquille.ouvrirTiroir('donnees'); document.getElementById('fichier-import').click(); } },
       { ic: 'moon', t: 'Changer de thème', s: 'Auto, clair ou sombre', mots: 'thème sombre clair nuit dark', fn: function () { Theme.basculer(); } },
+      { ic: 'tags', t: 'Gérer les étiquettes', mots: 'étiquettes tags gérer créer', fn: function () { EtiquettesUi.gerer(); } },
       { ic: 'circle-help', t: 'Aide et raccourcis', mots: 'aide raccourcis clavier help', fn: function () { Coquille.ouvrirTiroir('aide'); } }
     ];
   }
@@ -39,7 +40,8 @@ var Palette = (function () {
     Object.keys(recs).some(function (id) {
       var r = recs[id], f = DataImmo.batiment(id);
       var adr = (f && DataImmo.adresse(f.properties)) || Statuts.adresseDe(id);
-      if (correspond(q, (r.nom || '') + ' ' + adr + ' ' + (r.note || ''))) {
+      var extra = [Statuts.libelleQualif('projet', r.projet), r.potentiel ? 'potentiel ' + Statuts.libelleQualif('potentiel', r.potentiel) : ''].concat((r.etiquettes || []).map(Etiquettes.nom)).join(' ');
+      if (correspond(q, (r.nom || '') + ' ' + adr + ' ' + (r.note || '') + ' ' + extra)) {
         res.push({ ic: Statuts.parId(r.statut).icone, t: r.nom || adr || 'Maison', s: [r.nom ? adr : '', Statuts.parId(r.statut).label].filter(Boolean).join(' · '),
           fn: function () { Coquille.naviguer('carte'); var c = CarteImmo.centre(id); if (c) CarteImmo.getMap().setView(c, 19); if (CarteImmo.centre(id)) Panneau.ouvrir(id); } });
       }

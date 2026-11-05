@@ -6,7 +6,7 @@
 var RappelsUi = (function () {
   'use strict';
 
-  var liste, visible = false, animer = false;
+  var liste, visible = false, animer = false, tri = 'date';
   var el = Ui.el, icone = Ui.icone;
 
   function nombreRappels() {
@@ -36,6 +36,16 @@ var RappelsUi = (function () {
     var tx = el('div', 'cr-texte');
     tx.appendChild(el('strong', null, e.nom || e.adresse || 'Maison sans adresse'));
     if (e.nom && e.adresse) tx.appendChild(el('span', 'adresse', e.adresse));
+    // Qualification : potentiel, projet, échéance
+    var q = el('div', 'cr-qualif');
+    if (e.potentiel) {
+      var P = { chaud: ['flame', '#dc2626'], tiede: ['thermometer', '#d97706'], froid: ['snowflake', '#2563eb'] }[e.potentiel];
+      var pc = el('span', 'etiquette-statut'); pc.style.setProperty('--c', P[1]); pc.appendChild(icone(P[0])); pc.appendChild(document.createTextNode(Statuts.libelleQualif('potentiel', e.potentiel)));
+      q.appendChild(pc);
+    }
+    var det = [Statuts.libelleQualif('projet', e.projet), Statuts.libelleQualif('echeance', e.echeance)].filter(Boolean).join(' · ');
+    if (det) q.appendChild(el('span', 'sous-titre', det));
+    if (q.children.length) tx.appendChild(q);
     if (e.note) tx.appendChild(el('p', 'note', e.note));
     var d = depuis(e.date);
     var meta = el('span', 'cr-meta' + (d.jours > 7 ? ' retard' : '')); meta.appendChild(icone('clock', 'ic-sm')); meta.appendChild(document.createTextNode(d.texte + (e.tel ? ' · ' + e.tel : '')));
@@ -68,9 +78,21 @@ var RappelsUi = (function () {
   function dessiner() {
     Coquille.badge('rappels', nombreRappels());
     if (!visible) return;
+    var rang = { chaud: 0, tiede: 1, froid: 2 };
     var items = Stats.elementsReels().filter(function (e) { return e.statut === 'rappeler'; })
-      .sort(function (x, y) { return (x.date || '9') < (y.date || '9') ? -1 : 1; });
+      .sort(function (x, y) {
+        if (tri === 'potentiel') { var d = (x.potentiel ? rang[x.potentiel] : 3) - (y.potentiel ? rang[y.potentiel] : 3); if (d) return d; }
+        return (x.date || '9') < (y.date || '9') ? -1 : 1;
+      });
     liste.innerHTML = '';
+    if (items.length > 1) {
+      var seg = el('div', 'segments'); seg.style.marginBottom = '4px';
+      [['date', 'Plus anciens'], ['potentiel', 'Potentiel']].forEach(function (x) {
+        var b = Ui.bouton(x[1], '', function () { tri = x[0]; dessiner(); }, { 'aria-pressed': tri === x[0] ? 'true' : 'false' });
+        b.dataset.tri = x[0]; seg.appendChild(b);
+      });
+      liste.appendChild(seg);
+    }
     if (!items.length) {
       var v = el('div', 'vide');
       var m = el('div', 'medaillon'); m.appendChild(icone('party-popper', 'ic-lg')); v.appendChild(m);

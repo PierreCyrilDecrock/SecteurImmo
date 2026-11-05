@@ -13,6 +13,7 @@ var Panneau = (function () {
 
   function init() {
     contenu = document.getElementById('panneau-contenu');
+    Etiquettes.surChangement(function () { if (idCourant && !edition) dessiner(); });
     Statuts.surChangement(function (ids) { if (!edition && idCourant && ids.indexOf(idCourant) >= 0) dessiner(); });
   }
 
@@ -72,6 +73,27 @@ var Panneau = (function () {
     return i;
   }
 
+  // Potentiel : icône et teinte associées
+  var POTENTIEL = { chaud: ['flame', '#dc2626'], tiede: ['thermometer', '#d97706'], froid: ['snowflake', '#2563eb'] };
+
+  // Puces de choix d'une qualification (un nouveau clic sur la valeur choisie l'efface)
+  function choixQualif(id, champ, valeur) {
+    var w = el('div', 'puces'); w.setAttribute('role', 'group'); w.setAttribute('aria-label', Statuts.QUALIF[champ].titre);
+    Statuts.QUALIF[champ].valeurs.forEach(function (v) {
+      var contenu = [v[1]];
+      if (champ === 'potentiel') contenu.unshift(icone(POTENTIEL[v[0]][0], 'ic-sm'));
+      var b = Ui.bouton(contenu, 'puce', function () {
+        var nouveau = valeur === v[0] ? '' : v[0];
+        var patch = {}; patch[champ] = nouveau;
+        Statuts.modifier([id], patch); Ui.vibrer(8);
+      }, { 'aria-pressed': valeur === v[0] ? 'true' : 'false' });
+      b.dataset.champ = champ; b.dataset.valeur = v[0];
+      if (champ === 'potentiel') b.style.setProperty('--c', POTENTIEL[v[0]][1]);
+      w.appendChild(b);
+    });
+    return w;
+  }
+
   function dateCourte(d) {
     if (!d) return '';
     var dt = new Date(d.slice(0, 10) + 'T' + (d.slice(11, 16) || '00:00'));
@@ -99,7 +121,14 @@ var Panneau = (function () {
     // En-tête
     var tete = el('div', 'fiche-tete');
     var titre = el('div', 'fiche-titre');
-    titre.appendChild(Ui.etiquetteStatut(st));
+    var chips = el('div', 'fiche-chips');
+    chips.appendChild(Ui.etiquetteStatut(st));
+    if (rec.potentiel) {
+      var pc = el('span', 'etiquette-statut'); pc.style.setProperty('--c', POTENTIEL[rec.potentiel][1]);
+      pc.appendChild(icone(POTENTIEL[rec.potentiel][0])); pc.appendChild(document.createTextNode('Potentiel ' + Statuts.libelleQualif('potentiel', rec.potentiel).toLowerCase()));
+      chips.appendChild(pc);
+    }
+    titre.appendChild(chips);
     var h = el('h2'); h.id = 'fiche-titre';
     if (adr) h.textContent = adr.replace(/^≈\s*/, '');
     else if (recherches[id] && !manuel) h.textContent = 'Adresse inconnue';
@@ -118,12 +147,20 @@ var Panneau = (function () {
 
     // Statut
     var sStatut = section('Statut', 'flag');
-    var grille = el('div', 'choix-statuts');
+    var grille = el('div', 'choix-statuts tuiles');
     Statuts.ORDRE_CHOIX.forEach(function (sid, i) {
-      grille.appendChild(Ui.boutonStatut(Statuts.parId(sid), sid === statut, function () { choisir(sid); }, i + 1));
+      var stc = Statuts.parId(sid);
+      var b = Ui.boutonStatut(stc, sid === statut, function () { choisir(sid); }, i + 1);
+      b.querySelector('.libelle').textContent = stc.court; b.title = stc.label;
+      grille.appendChild(b);
     });
     sStatut.appendChild(grille);
     corps.appendChild(sStatut);
+
+    // Étiquettes rapides
+    var sEtiq = section('Étiquettes', 'tags');
+    sEtiq.appendChild(EtiquettesUi.bloc(rec.etiquettes, function (liste) { Statuts.modifier([id], { etiquettes: liste }); }));
+    corps.appendChild(sEtiq);
 
     // Passage
     var sPassage = section('Passage', 'calendar');
@@ -158,6 +195,16 @@ var Panneau = (function () {
     g2.style.gridTemplateColumns = '1fr 110px'; g2.style.marginTop = '10px';
     sContact.appendChild(g2);
     corps.appendChild(sContact);
+
+    // Qualification du contact
+    var sQualif = section('Qualification', 'target');
+    ['potentiel', 'projet', 'echeance', 'occupant'].forEach(function (champ) {
+      var ligne = el('div', 'ligne-qualif');
+      ligne.appendChild(el('span', 'etiquette', Statuts.QUALIF[champ].titre));
+      ligne.appendChild(choixQualif(id, champ, rec[champ]));
+      sQualif.appendChild(ligne);
+    });
+    corps.appendChild(sQualif);
 
     // Note
     var sNote = section('Note', 'sticky-note');
@@ -206,7 +253,7 @@ var Panneau = (function () {
     if (pied.children.length) contenu.appendChild(pied);
   }
 
-  // Choix d'un statut (bouton ou touche 1 à 6)
+  // Choix d'un statut (bouton ou touche 1 à 9)
   function choisir(sid) {
     var id = idCourant;
     if (!id) return;

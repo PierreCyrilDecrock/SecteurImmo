@@ -31,14 +31,14 @@
 /* Grille de cartes */
 .grille-tableau { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
 .grille-tableau > .bloc { animation: monte var(--t-lent) var(--ease) both; min-width: 0; }
-.s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s7 { grid-column: span 7; } .s8 { grid-column: span 8; } .s12 { grid-column: span 12; }
+.s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s6 { grid-column: span 6; } .s7 { grid-column: span 7; } .s8 { grid-column: span 8; } .s12 { grid-column: span 12; }
 @media (max-width: 1180px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .s4, .s5, .s7, .s8 { grid-column: span 6; } .s8.large, .s7.large { grid-column: span 12; } }
 @media (max-width: 767px) {
   .tableau-contenu { padding: 18px 14px 32px; }
   .tableau-tete h1 { font-size: 22px; }
   .kpis { gap: 10px; }
   .kpi { padding: 14px; } .kpi-valeur { font-size: 24px; }
-  .s4, .s5, .s7, .s8, .s12 { grid-column: span 12; }
+  .s4, .s5, .s6, .s7, .s8, .s12 { grid-column: span 12; }
 }
 
 /* Objectif de la semaine */
@@ -116,3 +116,52 @@ details.valeurs summary { cursor: pointer; color: var(--texte-2); font-weight: 5
 .lien-ligne { padding: 0; border: 0; background: none; color: var(--texte); font-weight: 600; text-align: left; text-decoration: underline; text-decoration-color: var(--bord-fort); text-underline-offset: 3px; }
 .lien-ligne:hover { text-decoration-color: currentColor; }
 .pied-journal { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12.5px; color: var(--texte-3); }
+
+/* Entonnoir commercial */
+.entonnoir { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.entonnoir li { display: grid; gap: 2px; }
+.etape { display: grid; grid-template-columns: 112px minmax(0, 1fr) 48px; align-items: center; gap: 10px; font-size: 13px; }
+.etape-nom { color: var(--texte-2); font-weight: 550; }
+.etape strong { text-align: right; font-size: 15px; }
+.etape-barre { height: 26px; border-radius: 7px; background: var(--surface-3); overflow: hidden; }
+.etape-barre span { display: block; height: 100%; width: 0; border-radius: 7px; background: var(--primaire); transition: width 800ms var(--ease); }
+.entonnoir li[data-etape="contacts"] .etape-barre span { background: var(--st-contact); }
+.entonnoir li[data-etape="estimations"] .etape-barre span { background: var(--st-estimation); }
+.entonnoir li[data-etape="mandats"] .etape-barre span { background: var(--st-mandat); }
+.conversion { display: inline-flex; align-items: center; gap: 2px; margin-left: 112px; padding-left: 10px; font-size: 11.5px; font-weight: 650; color: var(--texte-3); }
+.entonnoir + .sous-titre { margin-top: 12px; }
+
+/* Carte de chaleur des créneaux (échelle séquentielle d'une seule teinte) */
+.conseil { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--accent-doux); font-size: 13px; color: var(--texte); }
+.conseil .ic { color: var(--accent); margin-top: 1px; }
+.table-defilante.sans-bord { border: 0; }
+.carte-chaleur { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 12.5px; }
+.carte-chaleur th { font-weight: 600; color: var(--texte-3); padding: 2px 6px; text-align: center; white-space: nowrap; }
+.carte-chaleur tbody th { text-align: left; }
+.carte-chaleur td { height: 34px; min-width: 64px; border-radius: 7px; text-align: center; font-weight: 650; font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--st-prospectus) var(--k, 0%), var(--surface-2)); color: var(--texte); }
+.carte-chaleur td.fort { color: #fff; }
+.carte-chaleur td.peu { background: var(--surface-2); color: var(--texte-3); font-weight: 500; }
+.carte-chaleur td.meilleur { box-shadow: 0 0 0 2px var(--texte); }
+.legende-chaleur { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--texte-3); }
+.legende-chaleur .degrade { width: 90px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, color-mix(in srgb, var(--st-prospectus) 10%, var(--surface-2)), var(--st-prospectus)); }
+
+/* Prospects */
+.liste-prospects { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.liste-prospects li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--bord); }
+.liste-prospects li > * { flex: none; }
+.liste-prospects li > .txt { flex: 1; }
+.liste-prospects li:last-child { border-bottom: 0; }
+.liste-prospects .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.liste-prospects .txt .sous-titre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-prospects .lien-ligne { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+@media (max-width: 767px) { .liste-prospects .statut-prospect { display: none; } .liste-prospects li { gap: 8px; } }
+.mini-stat.alerte strong { color: var(--alerte); }
+.puce.statique { cursor: default; gap: 5px; }
+.puce.statique strong { color: var(--texte); }
+.tableau .qualif { min-width: 150px; }
+.tableau .qualif .sous-titre { display: block; margin-top: 3px; }
+.mini-etiquette { display: inline-flex; align-items: center; gap: 4px; margin: 4px 4px 0 0; padding: 1px 7px; border-radius: var(--r-plein); font-size: 11.5px; font-weight: 600; color: var(--texte-2); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.liste-prospects.compacte li { padding: 8px 0; gap: 8px; }
+.anciennete { font-size: 12px; font-weight: 650; color: var(--texte-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.anciennete.retard { color: var(--alerte); }
