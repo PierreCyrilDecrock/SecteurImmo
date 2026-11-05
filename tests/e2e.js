@@ -302,6 +302,13 @@ rubrique('Bilan (tableau de bord)', async (env) => {
   ok(await p.locator('#info-graphique').isVisible(), 'infobulle au survol du graphique');
   ok((await p.locator('.liste-repartition li').allInnerTexts()).length === 6, 'répartition (anneau + liste)');
   ok(/Rue du Parc/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()) && !/Rue des Lilas/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()), 'rues à terminer (rue terminée exclue)');
+  const deborde = async () => p.evaluate(() => [...document.querySelectorAll('#tableau .bloc')].reduce((n, b) => {
+    const d = b.getBoundingClientRect().right;
+    return n + [...b.querySelectorAll('.jauge, .haut span, .haut strong, .kpi-valeur')].filter(e => e.getBoundingClientRect().right > d + 0.5).length;
+  }, 0));
+  await p.evaluate(() => { const f = DataImmo.batiment('way/505'); f.properties['addr:street'] = 'Place Roger Salengro (Oullins) 69600 Oullins-Pierre-Bénite et environs'; });
+  await p.click('.segments [data-periode="7"]'); await p.click('.segments [data-periode="0"]');
+  ok(await deborde() === 0 && /Place Roger Salengro \(Oullins\)\s/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()) && !/69600/.test(await p.locator('.bloc:has-text("Rues à terminer")').innerText()), 'nom de rue très long : tronqué, code postal retiré, rien ne déborde des cartes');
   // objectif
   await p.click('#objectif-modifier'); await p.fill('#objectif-saisie', '20'); await p.keyboard.press('Enter');
   ok(/sur 20/.test(await p.locator('.objectif').innerText()), 'objectif de la semaine modifiable');

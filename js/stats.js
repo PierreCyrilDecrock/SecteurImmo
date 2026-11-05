@@ -25,7 +25,7 @@ var Stats = (function () {
       if (/^\d+\s?(bis|ter)?$/i.test(parts[0]) && parts[1]) return parts[1];
       return parts[0];
     }
-    a = a.replace(/\s+\d{5}\b.*$/, '');                         // code postal et ville
+    a = a.replace(/[\s,]*\b\d{5}\b.*$/, '');                     // code postal et ville
     a = a.replace(/^\d+\s?(?:bis|ter|quater|[a-d])?\s+/i, '');  // numéro
     return a.trim();
   }
@@ -44,7 +44,8 @@ var Stats = (function () {
     return Object.keys(ids).map(function (id) {
       var r = recs[id] || {}, f = DataImmo.batiment(id), c = centres[id] || (man[id] ? [man[id].lat, man[id].lon] : null);
       var texteAdr = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
-      var rue = (f && f.properties['addr:street']) || rueDe(adr[id]);
+      // Rue : étiquette OSM (sans un éventuel code postal collé), sinon tirée de l'adresse trouvée
+      var rue = (f && f.properties['addr:street'] ? f.properties['addr:street'].replace(/[\s,]*\b\d{5}\b.*$/, '').trim() : '') || rueDe(adr[id]);
       return {
         id: id, statut: r.statut || 'aucun', date: r.date || '', note: r.note || '', logements: r.logements || 0,
         nom: r.nom || '', tel: r.tel || '',

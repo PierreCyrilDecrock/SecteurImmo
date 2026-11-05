@@ -283,7 +283,7 @@ var StatsUi = (function () {
 
   // ---------- Secteurs et rues ----------
   function barre(nom, pct, droite, c) {
-    var li = el('li'); var h = el('div', 'haut'); h.appendChild(el('strong', null, nom)); h.appendChild(el('span', null, droite)); li.appendChild(h);
+    var li = el('li'); var h = el('div', 'haut'); var n = el('strong', null, nom); n.title = nom; h.appendChild(n); h.appendChild(el('span', null, droite)); li.appendChild(h);
     var j = el('div', 'jauge'); var s = el('span'); s.style.setProperty('--c', c || 'var(--primaire)'); j.appendChild(s); li.appendChild(j);
     requestAnimationFrame(function () { requestAnimationFrame(function () { s.style.width = pct + '%'; }); });
     return li;

@@ -90,11 +90,12 @@ details.valeurs summary { cursor: pointer; color: var(--texte-2); font-weight: 5
 .liste-repartition .p { width: 38px; text-align: right; color: var(--texte-3); font-variant-numeric: tabular-nums; }
 
 /* Listes à barres (secteurs, rues) */
-.liste-barres { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.liste-barres li { display: grid; gap: 6px; }
-.liste-barres .haut { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.liste-barres { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+/* minmax(0, 1fr) / min-width: 0 : un nom de rue très long est tronqué au lieu d'élargir la carte */
+.liste-barres li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.liste-barres .haut { display: flex; align-items: baseline; gap: 8px; font-size: 13px; min-width: 0; }
 .liste-barres .haut strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.liste-barres .haut span { color: var(--texte-3); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.liste-barres .haut span { flex: none; white-space: nowrap; color: var(--texte-3); font-variant-numeric: tabular-nums; font-size: 12.5px; }
 
 /* Journal */
 .barre-journal { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
