@@ -239,7 +239,7 @@ rubrique('Sauvegarde, export, import', async (env) => {
   let [dl] = await Promise.all([p.waitForEvent('download'), p.click('#btn-export-json')]);
   const fj = path.join(TMP, 'export.json'); await dl.saveAs(fj);
   const ex = JSON.parse(fs.readFileSync(fj, 'utf8'));
-  ok(ex.schema === 4 && Array.isArray(ex.etiquettes) && ex.records['way/100'].tel === '+33 6 12 34 56 78' && ex.records['way/100'].historique.length === 1 && ex.secteurs.secteurs.length === 1, 'export JSON (schéma 4 : contact, historique, étiquettes, secteurs)');
+  ok(ex.schema === 5 && ex.tournees && Array.isArray(ex.tournees.liste) && Array.isArray(ex.etiquettes) && ex.records['way/100'].tel === '+33 6 12 34 56 78' && ex.records['way/100'].historique.length === 1 && ex.secteurs.secteurs.length === 1, 'export JSON (schéma 5 : contact, historique, étiquettes, secteurs, tournées)');
   [dl] = await Promise.all([p.waitForEvent('download'), p.click('#btn-export-csv')]);
   const fc = path.join(TMP, 'export.csv'); await dl.saveAs(fc);
   const csv = fs.readFileSync(fc, 'utf8'), lignes = csv.split('\r\n');
@@ -495,7 +495,7 @@ rubrique('Thème, téléphone, hors ligne, position', async (env) => {
   ok(await m.locator('#tiroir.ouvert [data-section=donnees]').isVisible(), 'menu « Plus » → Données');
   await m.click('#voile', { position: { x: 200, y: 40 } });
   ok(await m.locator('#tiroir.ouvert').count() === 0, 'toucher le voile ferme la feuille');
-  await m.click('.rail [data-nav=tableau]'); await m.click('label:has(#stats-demo)'); await m.waitForTimeout(500);
+  await m.click('#btn-plus'); await m.click('#menu-plus [data-nav=tableau]'); await m.click('label:has(#stats-demo)'); await m.waitForTimeout(500);
   ok(await m.evaluate(() => document.getElementById('tableau').scrollWidth - document.getElementById('tableau').clientWidth) === 0, 'bilan sur téléphone : aucun débordement horizontal');
   await m.click('.rail [data-nav=carte]');
   ok(!m.erreurs.length, 'aucune erreur JavaScript sur téléphone');
@@ -532,6 +532,194 @@ rubrique('Thème, téléphone, hors ligne, position', async (env) => {
   await g.ctx.close();
 });
 
+rubrique('Tournées', async (env) => {
+  const p = await page(env, { contexte: { permissions: ['geolocation'], geolocation: { latitude: lat0, longitude: lon0, accuracy: 10 } } });
+  await chargerZone(p);
+  await p.click('#btn-tournee'); await p.waitForSelector('#dlg-tournee[open]');
+  await p.fill('#tournee-objectif', '10');
+  await p.click('#tournee-demarrer');
+  ok(await p.locator('#tournee-pilule').isVisible() && await p.locator('[data-mode=tournee][aria-pressed=true]').count() === 1, 'tournée démarrée : chrono affiché, pointage rapide activé');
+  ok(await p.evaluate(() => Position.active()), 'ma position activée pour mesurer la distance');
+  // premier point GPS : la carte se recentre sur la position, puis on pointe les maisons
+  await p.waitForFunction(() => Tournees.active().trace.length > 0); await p.waitForTimeout(300);
+  for (const id of ['way/100', 'way/101', 'way/102', 'way/103']) await clicMaison(p, id);
+  await p.keyboard.press('2'); await clicMaison(p, 'way/104');
+  await p.waitForTimeout(300);
+  ok(await p.locator('.tp-portes').innerText() === '5' && await p.locator('.tp-contacts').innerText() === '1', 'pilule : 5 portes, 1 contact');
+  await p.keyboard.press('Control+z');
+  ok(await p.evaluate(() => Tournees.stats(Tournees.active()).portes) === 4, 'annuler retire le passage de la tournée');
+  await clicMaison(p, 'way/104');
+  // distance : deux déplacements d'environ 55 m
+  await p.ctx.setGeolocation({ latitude: lat0 + 0.0005, longitude: lon0, accuracy: 10 }); await p.waitForTimeout(500);
+  await p.ctx.setGeolocation({ latitude: lat0 + 0.001, longitude: lon0, accuracy: 10 }); await p.waitForTimeout(500);
+  const dist = await p.evaluate(() => Tournees.active().distance);
+  ok(dist > 90 && dist < 130, 'distance parcourue mesurée (' + Math.round(dist) + ' m)');
+  await p.click('#tournee-pilule .tp-pause');
+  ok(await p.evaluate(() => Tournees.enPause()) && await p.locator('#tournee-pilule.en-pause').count() === 1, 'pause');
+  await vue(p, lat0 + 0.00025, lon0 + 0.0004, 19);   // la carte a suivi la position vers le nord : on revient sur les maisons
+  await clicMaison(p, 'way/105');
+  ok(!(await p.evaluate(() => Tournees.enPause())), 'pointer une maison relance la tournée');
+  // persistance pendant la tournée
+  await p.waitForTimeout(500); await recharger(p);
+  ok(await p.locator('#tournee-pilule').isVisible() && await p.evaluate(() => Tournees.stats(Tournees.active()).portes) === 6, 'tournée en cours conservée au rechargement');
+  await p.click('#tournee-pilule .tp-fin');
+  await p.waitForSelector('#dlg-bilan-tournee[open]');
+  const bilanTxt = (await p.locator('#dlg-bilan-tournee').innerText()).replace(/\n/g, ' ');
+  ok(/6\s*portes/.test(bilanTxt) && /60 %\s*de l'objectif/.test(bilanTxt) && /XP/.test(bilanTxt), 'bilan de fin : portes, objectif, expérience');
+  ok(/record/i.test(bilanTxt) && /Portes en une tournée/.test(bilanTxt), 'premier record signalé');
+  await p.click('#bilan-tournee-fermer');
+  ok(await p.locator('#tournee-pilule').isHidden() && await p.evaluate(() => Tournees.liste().length) === 1, 'tournée enregistrée, pilule masquée');
+  await p.click('.rail [data-nav=tournees]'); await p.waitForSelector('#vue-tournees .liste tbody tr');
+  ok(await p.locator('#vue-tournees .liste tbody tr').count() === 1, 'historique des tournées');
+  await p.locator('#vue-tournees .liste .lien-ligne').first().click(); await p.waitForSelector('#dlg-bilan-tournee[open]');
+  await p.fill('#tournee-nom', 'Lilas samedi'); await p.locator('#tournee-nom').press('Tab');
+  ok(await p.evaluate(() => Tournees.liste()[0].nom) === 'Lilas samedi', 'renommer une tournée');
+  await p.click('#dlg-bilan-tournee [data-action=carte]');
+  ok(await p.locator('#tableau, #vue-tournees').evaluateAll(e => e.every(x => x.hidden)) && /6 maisons en évidence/.test(await notif(p)), '« Voir sur la carte » : maisons de la tournée en évidence');
+  // tournée oubliée
+  await p.evaluate(() => { Tournees.demarrer({}); Statuts.modifier(['way/107'], { statut: 'prospectus' }); const t = Tournees.active(); t.debut -= 6 * 3600000; t.passages.forEach(x => x.t -= 5 * 3600000); return Store.kvSet('tournees', Tournees.exporter()); });
+  await p.waitForTimeout(500); await recharger(p);
+  await p.waitForSelector('#dlg-confirmer[open]');
+  ok(/restée ouverte/.test(await p.locator('#dlg-confirmer').innerText()), 'tournée oubliée : proposition de la terminer');
+  await p.click('#confirmer-oui'); await p.waitForSelector('#dlg-bilan-tournee[open]'); await p.click('#bilan-tournee-fermer');
+  ok(await p.evaluate(() => !Tournees.active() && Tournees.liste().length === 2 && Tournees.liste()[1].fin - Tournees.liste()[1].debut < 2 * 3600000), 'terminée à l\'heure de la dernière maison pointée');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
+  await p.ctx.close();
+});
+
+rubrique('Défis, badges, niveaux', async (env) => {
+  const p = await page(env, { animations: true, batiments: grille(10, 12, 2000, ['Rue A', 'Rue B']) });
+  await vue(p, lat0 + 0.0012, lon0 + 0.0014, 17);
+  await p.waitForSelector('#pastille-charger.action'); await p.click('#pastille-charger');
+  await p.waitForFunction(() => CarteImmo.total() === 120 && !DataImmo.enCours());
+  const e0 = await p.evaluate(() => Defis.etat());
+  ok(e0.experience.niveau === 1 && e0.defis.length === 3 && e0.defis[0].cible === 50, 'départ : niveau 1, 3 défis, « Faire 50 portes »');
+  await p.evaluate(() => Statuts.modifier(Object.keys(DataImmo._batiments()).slice(0, 49), { statut: 'prospectus' }));
+  await p.waitForTimeout(1000);
+  await p.evaluate(() => Statuts.modifier(Object.keys(DataImmo._batiments()).slice(49, 50), { statut: 'contact' }));
+  await p.waitForFunction(() => [...document.querySelectorAll('.notif .texte')].some(n => /Défi réussi : Faire 50 portes/.test(n.textContent)), null, { timeout: 4000 });
+  ok(true, 'défi « 50 portes » réussi : célébration');
+  ok(await p.locator('canvas.confettis').count() >= 1, 'confettis');
+  await p.evaluate(() => Statuts.modifier(Object.keys(DataImmo._batiments()).slice(50, 100), { statut: 'absent' }));
+  await p.waitForFunction(() => [...document.querySelectorAll('.notif .texte')].some(n => /Badge débloqué : Centurion/.test(n.textContent)), null, { timeout: 4000 });
+  ok(true, 'badge « Centurion » (100 portes) débloqué');
+  const e1 = await p.evaluate(() => Defis.etat());
+  ok(e1.records.find(r => r.cle === 'portes_jour').valeur === 100 && e1.experience.xp > e0.experience.xp, 'record « portes en un jour » et expérience en hausse (' + e1.experience.xp + ' XP)');
+  await p.waitForTimeout(800);
+  await recharger(p);
+  await p.waitForTimeout(1200);
+  ok(!(await p.locator('.notif .texte').allInnerTexts()).some(t => /Badge|Défi/.test(t)), 'pas de nouvelle célébration au rechargement');
+  await p.click('.rail [data-nav=tournees]'); await p.waitForSelector('.grille-badges');
+  ok(await p.locator('.badge-jeu.obtenu').count() >= 2 && await p.locator('.liste-defis li.reussi').count() >= 1, 'vue : badges obtenus et défi réussi');
+  ok(/Portes en un jour/.test(await p.locator('.grille-records').innerText()), 'vue : records');
+  await p.click('label:has(#celebrations)');
+  ok(await p.evaluate(() => !Celebration.actives()), 'confettis désactivables');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
+  await p.ctx.close();
+});
+
+rubrique('Base des maisons', async (env) => {
+  const p = await page(env, { batiments: grille(3, 4, 100, ['Rue des Lilas', 'Avenue du Parc', null]) });
+  await chargerZone(p);
+  await p.evaluate(() => {
+    Statuts.modifier(['way/100'], { statut: 'contact', nom: 'Mme Durand', tel: '06 11 22 33 44', potentiel: 'chaud', projet: 'vente', etiquettes: ['e-chien'] });
+    Statuts.modifier(['way/101'], { statut: 'prospectus' });
+    Statuts.modifier(['way/101'], { statut: 'rappeler', potentiel: 'tiede' });
+    Statuts.modifier(['way/102', 'way/103'], { statut: 'prospectus' });
+  });
+  await p.click('.rail [data-nav=base]'); await p.waitForSelector('.base-corps .base-ligne');
+  const lignes = () => p.locator('.base-corps .base-ligne').count();
+  ok(await lignes() === 12 && /12 maisons/.test(await p.locator('#vue-base .sous-titre').first().innerText()), '12 maisons dans la base');
+  await p.fill('#base-recherche', 'durand'); await p.waitForTimeout(250);
+  ok(await lignes() === 1, 'recherche par nom');
+  await p.fill('#base-recherche', ''); await p.waitForTimeout(250);
+  await p.click('#base-btn-filtres');
+  await p.click('[data-filtre="statut:prospectus"]');
+  ok(await lignes() === 2, 'filtre statut : 2 prospectus');
+  await p.click('[data-filtre="statut:rappeler"]');
+  ok(await lignes() === 3, 'plusieurs statuts');
+  await p.click('[data-filtre="potentiel:chaud"]').catch(() => {});
+  ok(await lignes() === 0, 'filtres combinés (statut ET potentiel)');
+  await p.click('#base-effacer-filtres');
+  await p.click('[data-filtre="etiquettes:e-chien"]');
+  ok(await lignes() === 1, 'filtre par étiquette');
+  await p.click('[data-filtre="etiquettes:e-chien"]');
+  await p.click('[data-filtre="jamais"]');
+  ok(await lignes() === 8, 'maisons jamais visitées : 8');
+  await p.click('[data-filtre="jamais"]');
+  await p.click('[data-filtre="avecTel"]');
+  ok(await lignes() === 1 && await p.locator('.base-corps a[href="tel:0611223344"]').count() === 1, 'avec un téléphone, lien d\'appel');
+  await p.click('[data-filtre="avecTel"]');
+  await p.fill('[data-filtre="passagesMin"]', '2'); await p.locator('[data-filtre="passagesMin"]').press('Tab');
+  ok(await lignes() === 1, 'au moins 2 passages');
+  await p.fill('[data-filtre="passagesMin"]', ''); await p.locator('[data-filtre="passagesMin"]').press('Tab');
+  await p.click('#base-btn-filtres');
+  // tri
+  await p.click('.base-tete .tri[data-col="adresse"]');
+  let adr = await p.locator('.base-corps .base-ligne .base-fixe').allInnerTexts();
+  ok(adr[0].startsWith('1 Avenue du Parc'), 'tri par adresse (' + adr[0] + ')');
+  await p.click('.base-tete .tri[data-col="adresse"]');
+  adr = await p.locator('.base-corps .base-ligne .base-fixe').allInnerTexts();
+  ok(/Adresse inconnue/.test(adr[adr.length - 1]) && adr[0].startsWith('7 Rue des Lilas'), 'tri inversé, adresses vides en dernier');
+  await p.click('.base-tete .tri[data-col="statut"]'); await p.click('.base-tete .tri[data-col="adresse"]', { modifiers: ['Shift'] });
+  ok(await p.locator('.base-tete .ordre-tri').count() === 2, 'tri sur deux colonnes (Maj + clic)');
+  // colonnes
+  await p.click('#base-btn-colonnes');
+  await p.check('.base-pop-colonnes input[data-col="echeance"]');
+  ok(await p.locator('.base-tete .tri[data-col="echeance"]').count() === 1, 'ajouter une colonne');
+  await p.uncheck('.base-pop-colonnes input[data-col="note"]');
+  ok(await p.locator('.base-tete .tri[data-col="note"]').count() === 0, 'masquer une colonne');
+  const ordre1 = await p.locator('.base-tete .tri').evaluateAll(b => b.map(x => x.dataset.col));
+  await p.locator('.base-pop-colonnes li:has(input[data-col="statut"]) button[aria-label^="Monter"]').click();
+  const ordre2 = await p.locator('.base-tete .tri').evaluateAll(b => b.map(x => x.dataset.col));
+  ok(ordre2.indexOf('statut') === ordre1.indexOf('statut') - 1, 'réordonner les colonnes');
+  await p.keyboard.press('Escape');
+  ok(await p.locator('.base-pop-colonnes').isHidden() && await p.locator('#vue-base').isVisible(), 'Échap ferme le menu des colonnes, pas la vue');
+  // vues enregistrées
+  await p.click('#base-btn-filtres'); await p.click('[data-filtre="statut:prospectus"]'); await p.click('#base-btn-filtres');
+  await p.click('#base-btn-vues'); await p.fill('#base-nom-vue', 'Mes prospectus'); await p.press('#base-nom-vue', 'Enter');
+  await p.click('#base-effacer-filtres').catch(async () => { await p.click('.base-filtres-actifs .puce-active'); });
+  await p.waitForTimeout(150);
+  ok(await lignes() === 12, 'filtres effacés');
+  await p.click('#base-btn-vues'); await p.click('[data-vue="Mes prospectus"]');
+  ok(await lignes() === 2, 'vue enregistrée réappliquée');
+  // sélection et actions groupées
+  await p.locator('.base-corps .base-ligne input[type=checkbox]').nth(0).check();
+  await p.locator('.base-corps .base-ligne input[type=checkbox]').nth(1).check();
+  ok(/2 sélectionnées/.test(await p.locator('.base-selection').innerText()), 'sélection de 2 maisons');
+  await p.selectOption('#base-sel-etiquette', 'e-travaux');
+  ok(await p.evaluate(() => Object.values(Statuts._records()).filter(r => (r.etiquettes || []).includes('e-travaux')).length) === 2, 'étiquette ajoutée à la sélection');
+  await p.selectOption('#base-sel-statut', 'absent');
+  ok(await p.evaluate(() => Object.values(Statuts._records()).filter(r => r.statut === 'absent').length) === 2, 'statut changé pour la sélection');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#base-btn-export')]);
+  const f = path.join(TMP, 'base.csv'); await dl.saveAs(f);
+  const csv = fs.readFileSync(f, 'utf8').split('\r\n');
+  ok(csv[0].includes('Échéance') && !csv[0].includes('Note') && csv.length >= 3, 'export CSV : colonnes affichées, lignes filtrées');
+  await p.click('#base-effacer-filtres').catch(async () => { await p.click('.base-filtres-actifs .puce-active'); });
+  await p.locator('.base-corps .base-ligne .base-fixe').first().click();
+  await p.waitForSelector('#panneau.ouverte');
+  ok(await p.locator('#vue-base').isHidden(), 'clic sur une ligne : fiche sur la carte');
+  await p.waitForTimeout(600); await recharger(p);
+  await p.click('.rail [data-nav=base]'); await p.waitForSelector('.base-corps .base-ligne');
+  ok(await p.locator('.base-tete .tri[data-col="echeance"]').count() === 1 && await p.locator('.base-tete .tri[data-col="note"]').count() === 0, 'colonnes conservées au rechargement');
+  await p.click('#base-btn-vues');
+  ok(await p.locator('[data-vue="Mes prospectus"]').count() === 1, 'vues conservées au rechargement');
+  // virtualisation : 3 000 maisons
+  await p.evaluate(() => {
+    const fs = [], a0 = 47.3, o0 = -1.5;
+    for (let i = 0; i < 3000; i++) fs.push({ type: 'Feature', id: 'way/' + (50000 + i), properties: { building: 'house', 'addr:street': 'Rue ' + (i % 40), 'addr:housenumber': String(i) }, geometry: { type: 'Polygon', coordinates: [[[o0 + i * 0.0002, a0], [o0 + i * 0.0002 + 0.00007, a0], [o0 + i * 0.0002 + 0.00007, a0 + 0.00007], [o0 + i * 0.0002, a0 + 0.00007], [o0 + i * 0.0002, a0]]] } });
+    DataImmo.ajouter(fs); CarteImmo.afficherBatiments(fs);
+  });
+  await p.mouse.click(700, 60); await p.waitForTimeout(400);
+  const nDom = await lignes();
+  ok(/3 012 maisons/.test(await p.locator('#vue-base .sous-titre').first().innerText()) && nDom < 80, 'virtualisation : 3 012 maisons, ' + nDom + ' lignes dessinées');
+  await p.evaluate(() => { const z = document.querySelector('.base-zone'); z.scrollTop = z.scrollHeight; });
+  await p.waitForTimeout(300);
+  ok(await p.locator('.base-corps .base-ligne').last().getAttribute('data-i') === '3011', 'défilement jusqu\'à la dernière ligne');
+  ok(!p.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.join(' | ') + ')');
+  await p.ctx.close();
+});
+
 rubrique('Accessibilité (axe-core) et performance', async (env) => {
   const p = await page(env);
   await chargerZone(p);
@@ -548,6 +736,8 @@ rubrique('Accessibilité (axe-core) et performance', async (env) => {
   await tiroir(p, 'secteurs'); await axe('panneau secteurs');
   await p.click('.rail [data-nav=tableau]'); await p.click('label:has(#stats-demo)'); await axe('bilan');
   await p.evaluate(() => { while (Theme.libelle() !== 'Sombre') Theme.basculer(); }); await axe('bilan, thème sombre');
+  await p.click('.rail [data-nav=tournees]'); await p.waitForSelector('.grille-badges'); await axe('tournées et défis');
+  await p.click('.rail [data-nav=base]'); await p.waitForSelector('.base-corps .base-ligne'); await axe('base des maisons');
   await p.click('.rail [data-nav=carte]');
   const noms = await p.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.offsetParent && !(b.getAttribute('aria-label') || b.textContent.trim())).length);
   ok(noms === 0, 'tous les boutons visibles ont un nom accessible');

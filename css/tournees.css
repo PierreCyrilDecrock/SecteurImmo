@@ -1,0 +1,104 @@
+/*
+ * tournees.css – Tournées et gamification : bouton du dock, pilule « tournée en cours », bilan de fin,
+ * vue « Tournées et défis » (niveau, défis, records, badges, historique), confettis.
+ */
+
+/* Bouton du dock */
+.outil-tournee[aria-pressed="true"] { background: #dc2626; color: #fff; }
+.outil-tournee[aria-pressed="true"] .ic { animation: battement 1.6s ease-in-out infinite; }
+@keyframes battement { 50% { opacity: .55; } }
+.rail-item .point.actif { background: #dc2626; animation: battement 1.6s ease-in-out infinite; }
+
+/* Pilule « tournée en cours » */
+.tournee-pilule { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 14px; border-radius: var(--r-plein); animation: monte var(--t-lent) var(--ease-ressort); font-size: 13.5px; }
+.tp-point { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 0 rgba(220, 38, 38, .5); animation: pouls 1.8s ease-out infinite; flex: none; }
+@keyframes pouls { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .5); } 70%, 100% { box-shadow: 0 0 0 9px rgba(220, 38, 38, 0); } }
+.tournee-pilule.en-pause .tp-point { background: var(--alerte); animation: none; }
+.tp-chrono { font-weight: 700; min-width: 58px; }
+.tp-stat { display: inline-flex; align-items: center; gap: 4px; color: var(--texte-2); }
+.tp-stat strong { color: var(--texte); }
+.tp-objectif { width: 56px; height: 6px; }
+.tp-objectif > span { background: var(--st-contact); }
+.tp-fin { border-radius: var(--r-plein); }
+
+/* Fenêtres */
+dialog.modale.modale-large { width: min(620px, calc(100vw - 24px)); }
+.formulaire { display: grid; gap: 14px; }
+.titre-saisie { font-size: 18px; font-weight: 700; padding: 4px 8px; min-height: 36px; margin-left: -8px; border-color: transparent; }
+.titre-saisie:hover { border-color: var(--bord-fort); }
+
+/* Bilan de fin de tournée */
+.bilan-tournee-haut { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 26px 20px 8px; }
+.bilan-tournee-haut .medaillon { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 20px; background: var(--surface-3); color: var(--texte); animation: apparait var(--t-lent) var(--ease-ressort); }
+.bilan-tournee-haut.record .medaillon { background: linear-gradient(140deg, #fbbf24, #d97706); color: #fff; box-shadow: 0 8px 22px rgba(217, 119, 6, .35); }
+.bilan-tournee-haut .medaillon .ic { width: 28px; height: 28px; }
+.bilan-tournee-haut h2 { font-size: 21px; font-weight: 750; }
+.bilan-tournee-haut p { color: var(--texte-3); font-size: 13px; }
+.grille-tuiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.tuile-tournee { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--bord); }
+.tuile-tournee .ic { color: var(--texte-3); margin-bottom: 4px; }
+.tuile-tournee strong { font-size: 19px; color: var(--texte); }
+.tuile-tournee span { font-size: 12px; color: var(--texte-3); }
+.liste-records { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.liste-records li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r); background: var(--alerte-doux); color: var(--texte); font-size: 13.5px; }
+.liste-records .ic { color: var(--alerte); }
+.liste-records strong { margin-left: auto; }
+.succes-ligne { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13.5px; color: var(--texte); }
+.succes-ligne .ic { color: var(--succes); }
+.xp-bilan { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; margin-top: 16px; padding: 12px; border-radius: var(--r); border: 1px solid var(--bord); }
+.xp-bilan strong { font-size: 17px; color: var(--st-estimation); }
+.xp-bilan span { font-size: 13px; color: var(--texte-2); }
+.xp-bilan .jauge { grid-column: 1 / -1; }
+
+/* Niveau */
+.bloc-niveau { display: flex; align-items: center; gap: 18px; padding: 20px; }
+.bloc-niveau .anneau .centre small { font-size: 10.5px; color: var(--texte-3); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.bloc-niveau .anneau .centre strong { font-size: 30px; line-height: 1; }
+.niveau-texte { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.niveau-texte h3 { font-size: 18px; font-weight: 750; }
+.niveau-texte .num { font-size: 15px; font-weight: 650; color: var(--st-estimation); }
+
+/* Défis */
+.liste-defis { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.liste-defis li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
+.defi-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--surface-3); color: var(--texte-2); }
+.liste-defis li.reussi .defi-ic { background: var(--succes-doux); color: var(--succes); }
+.liste-defis .txt { display: grid; gap: 6px; }
+.liste-defis .txt strong { font-size: 13.5px; }
+.defi-val { font-size: 12.5px; color: var(--texte-2); white-space: nowrap; }
+.defi-xp { font-size: 11.5px; font-weight: 700; color: var(--st-estimation); background: color-mix(in srgb, var(--st-estimation) 12%, transparent); padding: 2px 8px; border-radius: var(--r-plein); white-space: nowrap; }
+.liste-defis li.reussi .defi-xp { color: var(--succes); background: var(--succes-doux); }
+
+/* Records */
+.grille-records { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.record { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--bord); }
+.record .record-ic { display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 6px; border-radius: 10px; background: color-mix(in srgb, #d97706 14%, transparent); color: #d97706; }
+.record strong { font-size: 22px; letter-spacing: -.02em; }
+.record > span { font-size: 12.5px; color: var(--texte-2); }
+.record small { font-size: 11.5px; color: var(--texte-3); }
+.record.vide strong { color: var(--texte-3); }
+.record.vide .record-ic { background: var(--surface-3); color: var(--texte-3); }
+
+/* Badges */
+.grille-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.badge-jeu { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 14px 10px; border-radius: var(--r-lg); border: 1px dashed var(--bord-fort); color: var(--texte-3); }
+.badge-jeu strong { font-size: 13px; color: var(--texte-2); }
+.badge-jeu > span:not(.badge-medaille) { font-size: 11.5px; line-height: 1.35; }
+.badge-medaille { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 4px; border-radius: 50%; background: var(--surface-3); color: var(--texte-3); }
+.badge-jeu .jauge { width: 80%; height: 4px; margin-top: 6px; }
+.badge-jeu.obtenu { border-style: solid; border-color: var(--bord); background: var(--surface); color: var(--texte-2); }
+.badge-jeu.obtenu strong { color: var(--texte); }
+.badge-jeu.obtenu .badge-medaille { background: linear-gradient(140deg, #fbbf24, #d97706); color: #fff; box-shadow: 0 6px 14px rgba(217, 119, 6, .3); }
+
+/* Confettis */
+.confettis { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 5000; pointer-events: none; }
+
+@media (max-width: 767px) {
+  .tournee-pilule { gap: 8px; padding-left: 12px; font-size: 13px; }
+  .tp-objectif { display: none; }
+  .bloc-niveau { padding: 16px; }
+  .liste-defis li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .defi-xp { display: none; }
+  .grille-records { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grille-badges { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -12,7 +12,7 @@ var Store = (function () {
 
   var NOM_BASE = 'secteurimmo';
   var VERSION_BASE = 1;
-  var SCHEMA = 4;            // version du format des données (export compris)
+  var SCHEMA = 5;            // version du format des données (export compris)
   var db = null;
   var attente = null;        // écritures en attente : { magasin: { cle: valeur|null } }
   var timer = null;
@@ -51,6 +51,7 @@ var Store = (function () {
     // Schéma 1 -> 2 : ajout des secteurs (absents = liste vide, déjà géré par les valeurs par défaut)
     // Schéma 2 -> 3 : fiches enrichies (nom, téléphone, historique des passages) : champs facultatifs, rien à convertir
     // Schéma 3 -> 4 : étiquettes, qualification du contact, statuts commerciaux : champs facultatifs, rien à convertir
+    // Schéma 4 -> 5 : tournées (nouvelle liste facultative), rien à convertir
     // if (schemaLu < 3) { … }  ← à compléter quand le format changera
     return donnees;
   }
@@ -63,8 +64,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes'), lireCle('tournees'), lireCle('progression'), lireCle('base')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null, tournees: r[11] || null, progression: r[12] || null, base: r[13] || null };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });
@@ -180,6 +181,7 @@ var Store = (function () {
       (batimentsAGarder || []).forEach(function (f) { tx.objectStore('batiments').put(Object.assign({}, f)); });
       tx.objectStore('kv').put(Secteurs.exporter(), 'secteurs');
       tx.objectStore('kv').put(Etiquettes.exporter(), 'etiquettes');
+      tx.objectStore('kv').put(Tournees.exporter(), 'tournees');
       tx.oncomplete = function () { signaler(true); ok(); };
       tx.onerror = tx.onabort = function () { signaler(false); ok(); };
     });

@@ -68,7 +68,7 @@
   .rail-item { width: auto; flex: 1; font-size: 10.5px; padding: 2px 0; }
   .rail-item .rail-ic { width: 52px; height: 30px; border-radius: 15px; }
   .rail-plus { display: flex; }
-  .rail [data-nav="donnees"] { display: none; }   /* accessible par « Plus » */
+  .rail [data-nav="donnees"], .rail .rail-bureau { display: none; }   /* accessibles par « Plus » */
   .scene { position: fixed; z-index: 50; inset: 0 0 calc(var(--barre-onglets) + env(safe-area-inset-bottom)) 0; }
   .scene.tiroir-ouvert, .scene.fiche-ouverte { --decalage-g: 0px; --decalage-d: 0px; }
 

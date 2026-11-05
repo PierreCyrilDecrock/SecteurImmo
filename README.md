@@ -1,6 +1,6 @@
 # SecteurImmo
 
-**Le carnet de prospection terrain du mandataire immobilier.** Sur une carte, cochez chaque maison visitée (prospectus déposé, contact, absent, refus, à rappeler), suivez la couverture de vos secteurs, vos rappels et vos résultats de la semaine.
+**Le carnet de prospection terrain du mandataire immobilier.** Sur une carte, cochez chaque maison visitée (prospectus déposé, contact, absent, refus, à rappeler), chronométrez vos **tournées**, battez vos **records**, relevez les **défis** de la semaine, et retrouvez toutes vos adresses dans une **base** triable et filtrable.
 
 Application web **100 % HTML / CSS / JavaScript** : pas de serveur, pas de base de données, pas de compte. Tout reste dans **votre navigateur**, sur votre appareil. Elle s'utilise sur ordinateur et sur téléphone, et s'installe comme une application (y compris hors ligne).
 
@@ -9,13 +9,15 @@ Application web **100 % HTML / CSS / JavaScript** : pas de serveur, pas de base 
 1. [Démarrage rapide](#démarrage-rapide)
 2. [L'interface](#linterface)
 3. [Prospecter sur la carte](#prospecter-sur-la-carte)
-4. [Secteurs, rappels, bilan](#secteurs-rappels-bilan)
-5. [Sur le terrain (téléphone)](#sur-le-terrain-téléphone)
-6. [Sauvegarde, export, import](#sauvegarde-export-import)
-7. [Publier sur GitHub Pages](#publier-sur-github-pages-facultatif)
-8. [Limites à connaître](#limites-à-connaître)
-9. [FAQ](#faq)
-10. [Pour les développeurs](#pour-les-développeurs)
+4. [Tournées, records et défis](#tournées-records-et-défis)
+5. [Base des maisons](#base-des-maisons)
+6. [Secteurs, rappels, bilan](#secteurs-rappels-bilan)
+7. [Sur le terrain (téléphone)](#sur-le-terrain-téléphone)
+8. [Sauvegarde, export, import](#sauvegarde-export-import)
+9. [Publier sur GitHub Pages](#publier-sur-github-pages-facultatif)
+10. [Limites à connaître](#limites-à-connaître)
+11. [FAQ](#faq)
+12. [Pour les développeurs](#pour-les-développeurs)
 
 ## Démarrage rapide
 
@@ -30,12 +32,12 @@ Au premier lancement, une courte présentation explique l'essentiel. Ensuite :
 1. **Recherchez** votre ville ou votre rue (barre en haut, ou `Ctrl K`).
 2. Zoomez sur les rues puis touchez **« Charger les maisons de cette zone »** (en bas de la carte).
 3. **Secteurs** : dessinez votre zone pour suivre le pourcentage couvert.
-4. Sur le terrain, passez en **Tournée rapide** et touchez chaque maison faite.
-5. Suivez vos résultats dans **Bilan** et vos personnes à recontacter dans **Rappels**.
+4. Sur le terrain, **démarrez une tournée** (bouton ▶ du dock) : le chrono tourne, le pointage rapide s'active, touchez chaque maison faite.
+5. À la fin, le **bilan de tournée** affiche vos chiffres, vos records battus et l'expérience gagnée. Suivez vos progrès dans **Tournées**, vos résultats dans **Bilan**, vos adresses dans **Base**, vos personnes à recontacter dans **Rappels**.
 
 ## L'interface
 
-- **Navigation** : rail à gauche sur ordinateur (Carte, Secteurs, Bilan, Rappels, Données, Aide, Thème), barre d'onglets en bas sur téléphone (Données, Aide et Thème dans « Plus »). Le badge rouge de **Rappels** indique le nombre de personnes à rappeler ; une pastille orange sur **Données** signale qu'aucune sauvegarde n'a été faite depuis 7 jours.
+- **Navigation** : rail à gauche sur ordinateur (Carte, Secteurs, Tournées, Bilan, Base, Rappels, Données, Aide, Thème), barre d'onglets en bas sur téléphone (Carte, Secteurs, Tournées, Rappels ; Bilan, Base, Données, Aide et Thème dans « Plus »). Un point rouge sur **Tournées** signale une tournée en cours. Le badge rouge de **Rappels** indique le nombre de personnes à rappeler ; une pastille orange sur **Données** signale qu'aucune sauvegarde n'a été faite depuis 7 jours.
 - **Recherche et commandes** (`Ctrl K` ou `/`, ou la barre de recherche) : adresses et villes, maisons déjà renseignées (par nom, adresse ou note), secteurs, et toutes les actions (nouveau secteur, tournée, exporter, changer de thème…).
 - **Thème** : automatique (suit le système), clair ou sombre ; la carte s'assombrit avec le thème.
 - **Fonds de carte** (bouton calques, en haut à droite) : *Épuré* (plan désaturé, par défaut : les statuts ressortent), *Plan* (OpenStreetMap), *Plan IGN*, *Satellite* (IGN).
@@ -54,8 +56,9 @@ La pastille en bas de la carte guide : *« Zoomez pour afficher les maisons »* 
 
 | Outil | Raccourci | Effet |
 |---|---|---|
+| **Tournée** (▶, rouge pendant une tournée) | | Démarre une tournée chronométrée, ou la termine (voir [Tournées](#tournées-records-et-défis)). |
 | **Consulter** | `V` | Toucher une maison ouvre sa fiche. |
-| **Tournée rapide** | `T` | Un statut « de porte » est actif (choisi dans le bandeau ou avec les touches `1`…`9`) ; chaque maison touchée le reçoit, avec une onde colorée, une vibration sur téléphone et « Annuler ». |
+| **Pointage rapide** | `T` | Un statut « de porte » est actif (choisi dans le bandeau ou avec les touches `1`…`9`) ; chaque maison touchée le reçoit, avec une onde colorée, une vibration sur téléphone et « Annuler ». |
 | **Sélection multiple** | `S` | Entourez des maisons (rectangle ou lasso), puis appliquez un statut ou une étiquette à toutes. |
 | **Ajouter** | `A` | Placez une maison absente d'OpenStreetMap. |
 | **Annuler** | `Ctrl Z` | Annule la dernière modification. |
@@ -82,6 +85,39 @@ Repères rapides que vous créez vous-même (6 proposées au départ : *Stop pub
 ### La légende (en bas à gauche)
 
 Compteurs par statut, avancement des maisons chargées. Touchez un statut pour le masquer ou l'afficher, et utilisez le **filtre** pour n'afficher que les maisons d'un **potentiel**, d'un **projet** ou d'une **étiquette** (ex. « Potentiel chaud » pour préparer vos relances).
+
+## Tournées, records et défis
+
+### Une tournée
+
+Bouton **▶** du dock (ou `Ctrl K` → « Démarrer une tournée ») : choisissez éventuellement un **secteur** (proposé d'après la carte) et un **objectif de portes**, puis *Démarrer*. Par défaut, le **pointage rapide** s'active et **Ma position** mesure la distance parcourue (désactivables).
+
+Pendant la tournée, une **pilule** au-dessus du dock affiche le chrono, les portes, les contacts, la jauge de l'objectif, **Pause** et **Terminer**. Chaque statut posé pendant la tournée (pointage rapide, fiche ou sélection) y est compté ; « Annuler » le retire aussi de la tournée. Pointer une maison pendant une pause relance le chrono. La tournée en cours survit à un rechargement ; si elle est restée ouverte plus de 4 heures sans activité, l'application propose de la terminer à l'heure de la dernière maison pointée.
+
+**Bilan de fin** : durée, portes, contacts, taux de contact, rythme (portes / heure, à partir de 10 min), distance, rues parcourues, répartition par statut, % de l'objectif, **records battus**, succès débloqués et expérience gagnée ; *Voir sur la carte* met en évidence les maisons de la tournée et trace le parcours. Une tournée sans aucune maison n'est pas enregistrée.
+
+### La vue Tournées
+
+- **Niveau** et expérience (XP) : chaque passage rapporte des points (2 pour une porte, 6 pour un rappel, 8 pour un contact, 30 pour une estimation, 150 pour un mandat), plus 20 par tournée, les badges et les défis réussis. 8 titres, de *Débutant* (niveau 1) à *Légende locale* (niveau 25).
+- **Défis de la semaine** (renouvelés le lundi) : « Faire N portes », dont la cible s'adapte à votre moyenne des 4 semaines précédentes (+ 15 %), et deux défis tirés au sort (rencontrer des personnes, prospecter 4 jours, tournées du soir, une estimation, une tournée de 2 h, qualifier 5 contacts, 30 % de contact…).
+- **Records** : portes et contacts en un jour, portes en une semaine, jours d'affilée, mandats en un mois, et par tournée : portes, rythme, taux de contact, durée, distance.
+- **Badges** (19) : premier pas, 100 / 1 000 / 5 000 portes, premier contact, 100 contacts, première estimation, premier mandat, 10 mandats, séries de 5 et 15 jours, lève-tôt, oiseau de nuit, marathon, sprinteur, secteur bouclé, explorateur, fin limier, métronome. Les badges verrouillés montrent leur progression.
+- **Historique** des tournées (totaux, tableau) : un clic rouvre le bilan, pour **renommer**, **voir sur la carte** ou **supprimer** la tournée (les statuts des maisons ne sont pas touchés).
+
+Un défi réussi, un badge ou un niveau gagné est **célébré** une seule fois (notification, confettis, vibration) ; les confettis se désactivent dans la vue Tournées et ne s'affichent pas si le système demande de réduire les animations. Tout est **recalculé à partir de vos données** (historique des passages et tournées) : rien n'est perdu à l'import d'une sauvegarde.
+
+## Base des maisons
+
+Toutes les maisons connues (chargées, ajoutées ou renseignées) dans un tableau, avec leurs données :
+- **colonnes au choix** (bouton *Colonnes*) : adresse, nom, téléphone (lien d'appel), statut, dernier passage, premier passage, nombre de passages, potentiel, projet, échéance, occupant, étiquettes, note, logements, secteurs, rue, type, tournées, ajoutée à la main, latitude, longitude, identifiant ; **réordonnables** (Monter / Descendre) ;
+- **tri** par un clic sur un en-tête (second clic : ordre inverse), sur plusieurs colonnes avec `Maj` + clic ; les valeurs vides restent en dernier ;
+- **recherche** (adresse, nom, téléphone, note, étiquette…) et **filtres** combinables : statuts, potentiel, projet, échéance, occupant, étiquettes (*au moins une* ou *toutes*), secteurs, période du dernier passage (ou *jamais visitées*), nombre de passages, avec nom / téléphone / note, qualifiées, ajoutées à la main. Les filtres actifs s'affichent en puces, retirables une à une ;
+- **vues enregistrées** : une combinaison de filtres, tri et colonnes, rappelée en un clic ;
+- **sélection** (cases à cocher) : changer le statut, ajouter une étiquette, voir sur la carte, exporter ;
+- **export CSV** des lignes filtrées et des colonnes affichées ;
+- un clic sur une ligne ouvre la maison sur la carte.
+
+Le tableau est virtualisé : il reste fluide avec des milliers de maisons. Colonnes, tri et vues sont mémorisés.
 
 ## Secteurs, rappels, bilan
 
@@ -115,6 +151,8 @@ La date retenue pour une maison dans l'activité est celle de son **dernier chan
 
 ## Sur le terrain (téléphone)
 
+- **Tournée** : touchez ▶ en partant ; la pilule au-dessus du dock donne le chrono et vos portes, le bandeau de pointage rapide tient sur une ligne (faites-le défiler pour les autres statuts).
+
 - Barre d'onglets en bas ; la fiche et les panneaux s'ouvrent en **feuilles** que l'on referme en les tirant vers le bas (ou en touchant le fond).
 - Grandes cibles tactiles et **zone d'appui élargie** autour des maisons.
 - **Ma position** (bouton viseur à droite) : point bleu suivi en direct ; déplacez la carte pour arrêter le recentrage, retouchez pour recentrer, touchez pendant le suivi pour arrêter. L'écran reste allumé pendant le suivi si le navigateur le permet. La position n'est ni enregistrée ni envoyée (elle exige `localhost` ou `https://`).
@@ -123,9 +161,9 @@ La date retenue pour une maison dans l'activité est celle de son **dernier chan
 ## Sauvegarde, export, import
 
 Panneau **Données** :
-- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, qualifications, étiquettes, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, objectif, maisons chargées, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
+- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, qualifications, étiquettes, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, **tournées**, objectif, maisons chargées, réglages de la base, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
 - **Stockage protégé** : dès la première maison renseignée, l'application demande au navigateur de ne jamais effacer ses données, même si l'espace disque manque (`navigator.storage.persist()`). Chrome et Edge l'accordent en général sans rien demander (surtout si l'application est installée ou utilisée souvent) ; Firefox peut afficher une demande d'autorisation. L'état (protégé ou non, espace utilisé) est affiché dans **Données**, avec un bouton **Protéger** si besoin.
-- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 4 ; les sauvegardes des versions précédentes restent importables).
+- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 5, avec les tournées ; les sauvegardes des versions précédentes restent importables).
 - **Tableur (CSV)** : `id ; adresse ; nom ; telephone ; statut ; date ; potentiel ; projet ; echeance ; occupant ; etiquettes ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
 - **Importer** (glisser-déposer ou clic) : aperçu, puis **Fusionner** (en cas de doublon, la version la plus récente est gardée) ou **Remplacer** (avec, par défaut, une copie de sécurité de vos données actuelles). Le fichier est validé et nettoyé.
 - **Fichier lié** (Chrome / Edge) : réécrit automatiquement après chaque modification ; à reconnecter après un redémarrage du navigateur.
@@ -169,16 +207,17 @@ Aucun build, aucun npm pour l'application : des scripts classiques (pas de modul
 
 ```
 index.html  manifest.json  sw.js  lancer.bat  lancer.sh
-css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau
+css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau · tournees · base
 js/    pwa · theme · ui · notifications · geocode · data · statuts · etiquettes · map · coquille · carte-ui · etiquettes-ui · panneau
-       position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · outils · palette · store · echange · aide · app
+       position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · tournees · defis · celebration · progression
+       tournees-ui · base · outils · palette · store · echange · aide · app
 vendor/ leaflet 1.9.4 (BSD-2) · lucide (icônes, ISC, sous-ensemble en sprite SVG) · inter (police variable, SIL OFL)
 icons/  icônes de l'application installée
 tests/  tests de bout en bout (Playwright) – non publiés
 ```
 
-- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
-- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `notifications.js` · `theme.js`.
+- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `tournees.js` (tournées : passages, pauses, distance) · `defis.js` (records, badges, défis, expérience, tous dérivés des données) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
+- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `tournees-ui.js` (pilule, bilan de fin, vue Tournées) · `progression.js` + `celebration.js` (succès célébrés une fois, confettis) · `base.js` (tableau virtualisé, tris, filtres, colonnes, vues) · `notifications.js` · `theme.js`.
 - **Design** : jetons (couleurs, rayons, ombres, mouvements) dans `css/tokens.css`, thème posé sur `<html data-theme>`. Les couleurs des statuts forment une palette catégorielle validée pour les daltoniens (clair et sombre).
 - **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION`), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.
 - **Tests** : `node tests/e2e.js` (Playwright doit être installé ; `axe-core` facultatif pour les contrôles d'accessibilité automatiques ; `node tests/e2e.js secteurs` ne lance qu'une rubrique). Les services externes sont simulés par interception réseau : les tests ne dépendent pas d'Internet.

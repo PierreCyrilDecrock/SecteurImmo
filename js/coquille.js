@@ -18,7 +18,7 @@ var Coquille = (function () {
   function majNav() {
     document.querySelectorAll('.rail [data-nav]').forEach(function (b) {
       var n = b.dataset.nav;
-      if (n === 'carte' || n === 'tableau') {
+      if (n === 'carte' || estVuePleine(n)) {
         if (n === vue && !(n === 'carte' && tiroirOuvert && telephone())) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
       } else b.setAttribute('aria-expanded', tiroirOuvert === n ? 'true' : 'false');
     });
@@ -75,26 +75,33 @@ var Coquille = (function () {
     return true;
   }
 
-  // ---------- Vues ----------
+  // ---------- Vues pleine page (Bilan, Tournées, Base) ----------
+  // VUES : nom -> id de l'élément ; les modules s'enregistrent avec enregistrerVue(nom, { ouvrir, fermer })
+  var VUES = { tableau: 'tableau', tournees: 'vue-tournees', base: 'vue-base' }, modulesVues = {};
+  function enregistrerVue(nom, m) { modulesVues[nom] = m; }
+  function estVuePleine(n) { return Object.prototype.hasOwnProperty.call(VUES, n); }
+
   function allerVue(v) {
     if (v === vue) { if (v === 'carte' && tiroirOuvert) fermerTiroir(); return; }
+    var ancienne = vue;
     vue = v;
-    if (v === 'tableau') {
-      fermerTiroir(); if (window.Panneau) Panneau.fermer();
-      tableau.hidden = false;
-      if (window.StatsUi) StatsUi.ouvrir();
-      tableau.focus({ preventScroll: true });
-    } else {
-      tableau.hidden = true;
-      if (window.StatsUi) StatsUi.fermer();
-      if (window.CarteImmo) setTimeout(function () { CarteImmo.getMap().invalidateSize(); }, 0);
+    if (estVuePleine(ancienne)) {
+      document.getElementById(VUES[ancienne]).hidden = true;
+      if (modulesVues[ancienne] && modulesVues[ancienne].fermer) modulesVues[ancienne].fermer();
     }
+    if (estVuePleine(v)) {
+      fermerTiroir(); if (window.Panneau) Panneau.fermer();
+      var e = document.getElementById(VUES[v]);
+      e.hidden = false;
+      if (modulesVues[v] && modulesVues[v].ouvrir) modulesVues[v].ouvrir();
+      e.focus({ preventScroll: true });
+    } else if (window.CarteImmo) setTimeout(function () { CarteImmo.getMap().invalidateSize(); }, 0);
     fermerMenuPlus();
     majNav();
   }
 
   function naviguer(nom, declencheur) {
-    if (nom === 'carte' || nom === 'tableau') { if (tiroirOuvert && nom === 'carte') fermerTiroir(); allerVue(nom); return; }
+    if (nom === 'carte' || estVuePleine(nom)) { if (tiroirOuvert && nom === 'carte') fermerTiroir(); allerVue(nom); return; }
     if (tiroirOuvert === nom) fermerTiroir(); else ouvrirTiroir(nom, declencheur);
   }
 
@@ -103,7 +110,7 @@ var Coquille = (function () {
     if (!menuPlus.hidden) { fermerMenuPlus(); return true; }
     if (ficheOuverte && window.Panneau) { Panneau.fermer(); return true; }
     if (fermerTiroir()) return true;
-    if (vue === 'tableau') { allerVue('carte'); return true; }
+    if (estVuePleine(vue)) { allerVue('carte'); return true; }
     return false;
   }
 
@@ -143,7 +150,7 @@ var Coquille = (function () {
   function init() {
     scene = document.getElementById('scene'); tiroir = document.getElementById('tiroir'); fiche = document.getElementById('panneau');
     voile = document.getElementById('voile'); tableau = document.getElementById('tableau'); menuPlus = document.getElementById('menu-plus');
-    tableau.tabIndex = -1;
+    Object.keys(VUES).forEach(function (k) { var e = document.getElementById(VUES[k]); if (e) e.tabIndex = -1; });
     document.querySelectorAll('[data-nav]').forEach(function (b) {
       b.addEventListener('click', function () { naviguer(b.dataset.nav, b); });
     });
@@ -164,7 +171,7 @@ var Coquille = (function () {
   }
 
   return {
-    init: init, enregistrer: enregistrer, ouvrirTiroir: ouvrirTiroir, fermerTiroir: fermerTiroir, naviguer: naviguer, allerVue: allerVue,
+    init: init, enregistrer: enregistrer, enregistrerVue: enregistrerVue, ouvrirTiroir: ouvrirTiroir, fermerTiroir: fermerTiroir, naviguer: naviguer, allerVue: allerVue,
     ouvrirFiche: ouvrirFiche, fermerFiche: fermerFiche, echap: echap, badge: badge, point: point,
     vue: function () { return vue; }, tiroir: function () { return tiroirOuvert; }, telephone: telephone
   };

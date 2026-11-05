@@ -607,6 +607,7 @@ var StatsUi = (function () {
 
   function init() {
     racine = document.getElementById('tableau'); tip = document.getElementById('info-graphique');
+    Coquille.enregistrerVue('tableau', { ouvrir: ouvrir, fermer: fermer });
     var t = null;
     window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { if (ouvert) dessiner(); }, 250); });
     Statuts.surChangement(function () { invalider(); if (ouvert) { clearTimeout(t); t = setTimeout(dessiner, 150); } });

@@ -57,6 +57,7 @@ var Statuts = (function () {
   var pile = [];      // opérations annulables : { avant: { id: copie|null } }
   var PILE_MAX = 200;
   var ecouteurs = [];
+  var ecouteursPassages = [];   // (passages, annulation) : passages = [{ id, statut, t }]
   var ecouteursDonnees = []; // pour la sauvegarde : (type, ids), type = 'records' | 'manuels' | 'adresses'
 
   function copie(r) { return r ? JSON.parse(JSON.stringify(r)) : null; }
@@ -97,7 +98,7 @@ var Statuts = (function () {
 
   // Applique un changement différent à chaque maison ({ id: patch }) en une seule opération annulable
   function modifierChacun(patchs) {
-    var avant = {}, modifies = [];
+    var avant = {}, modifies = [], passages = [];
     Object.keys(patchs).forEach(function (id) {
       var patch = patchs[id];
       var ancien = records[id];
@@ -114,6 +115,7 @@ var Statuts = (function () {
       // Historique des passages : une entrée par changement de statut (les 30 dernières)
       if (statutChange && (r.statut || 'aucun') !== 'aucun') {
         r.historique = (r.historique || []).concat([{ statut: r.statut, date: r.date }]).slice(-30);
+        passages.push({ id: id, statut: r.statut, t: Date.now() });
       } else if (!statutChange && patch.date !== undefined && r.historique && r.historique.length) {
         var dernier = r.historique[r.historique.length - 1];
         if (dernier.statut === r.statut) r.historique[r.historique.length - 1] = { statut: r.statut, date: r.date };
@@ -126,8 +128,10 @@ var Statuts = (function () {
       modifies.push(id);
     });
     if (!modifies.length) return 0;
-    pile.push({ avant: avant });
+    pile.push({ avant: avant, passages: passages });
     if (pile.length > PILE_MAX) pile.shift();
+    // Passages (changement vers un statut « fait ») : servent aux tournées et aux défis
+    if (passages.length) ecouteursPassages.forEach(function (cb) { cb(passages, false); });
     notifier(modifies);
     return modifies.length;
   }
@@ -139,6 +143,7 @@ var Statuts = (function () {
     ids.forEach(function (id) {
       if (op.avant[id]) records[id] = op.avant[id]; else delete records[id];
     });
+    if (op.passages && op.passages.length) ecouteursPassages.forEach(function (cb) { cb(op.passages, true); });
     notifier(ids);
     return true;
   }
@@ -206,7 +211,7 @@ var Statuts = (function () {
     charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
     LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, CONTACTS: CONTACTS, QUALIF: QUALIF, libelleQualif: libelleQualif, parId: function (id) { return parId[id] || parId.aucun; },
     get: get, statutDe: statutDe, modifier: modifier, modifierChacun: modifierChacun, annuler: annuler, peutAnnuler: peutAnnuler,
-    surChangement: surChangement, maintenant: maintenant,
+    surChangement: surChangement, surPassages: function (cb) { ecouteursPassages.push(cb); }, maintenant: maintenant,
     ajouterManuel: ajouterManuel, supprimerManuel: supprimerManuel,
     manuels: function () { return manuels; },
     setAdresse: setAdresse, adresseDe: adresseDe, compter: compter,

@@ -11,7 +11,7 @@
  */
 'use strict';
 
-var VERSION = 'secteurimmo-v3';   // à changer si des fichiers sont supprimés/renommés
+var VERSION = 'secteurimmo-v4';   // à changer si des fichiers sont supprimés/renommés
 var FICHIERS = [
   './',
   'index.html',
@@ -22,6 +22,8 @@ var FICHIERS = [
   'css/carte.css',
   'css/panneaux.css',
   'css/tableau.css',
+  'css/tournees.css',
+  'css/base.css',
   'vendor/leaflet/leaflet.js',
   'js/pwa.js',
   'js/theme.js',
@@ -42,6 +44,12 @@ var FICHIERS = [
   'js/rappels-ui.js',
   'js/stats.js',
   'js/stats-ui.js',
+  'js/tournees.js',
+  'js/defis.js',
+  'js/celebration.js',
+  'js/progression.js',
+  'js/tournees-ui.js',
+  'js/base.js',
   'js/outils.js',
   'js/palette.js',
   'js/store.js',

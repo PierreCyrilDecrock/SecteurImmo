@@ -30,6 +30,8 @@
   <link rel="stylesheet" href="css/carte.css">
   <link rel="stylesheet" href="css/panneaux.css">
   <link rel="stylesheet" href="css/tableau.css">
+  <link rel="stylesheet" href="css/tournees.css">
+  <link rel="stylesheet" href="css/base.css">
 </head>
 <body>
 <div class="app">
@@ -39,7 +41,9 @@
     <a class="logo" href="#" aria-label="SecteurImmo" data-tip="SecteurImmo" data-tip-pos="droite"><svg class="ic"><use href="vendor/lucide/icons.svg#map-pinned"/></svg></a>
     <button type="button" class="rail-item" data-nav="carte" aria-current="page"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#map"/></svg></span>Carte</button>
     <button type="button" class="rail-item" data-nav="secteurs" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#pentagon"/></svg></span>Secteurs</button>
-    <button type="button" class="rail-item" data-nav="tableau"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#layout-dashboard"/></svg></span>Bilan</button>
+    <button type="button" class="rail-item" data-nav="tournees"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#trophy"/></svg></span>Tournées<span class="point actif" id="point-tournee" hidden></span></button>
+    <button type="button" class="rail-item rail-bureau" data-nav="tableau"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#layout-dashboard"/></svg></span>Bilan</button>
+    <button type="button" class="rail-item rail-bureau" data-nav="base"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#table"/></svg></span>Base</button>
     <button type="button" class="rail-item" data-nav="rappels" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#bell"/></svg></span>Rappels<span class="badge" id="badge-rappels" hidden>0</span></button>
     <button type="button" class="rail-item" data-nav="donnees" aria-expanded="false" aria-controls="tiroir"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#database"/></svg></span>Données<span class="point" id="point-donnees" hidden></span></button>
     <button type="button" class="rail-item rail-plus" id="btn-plus" aria-expanded="false" aria-haspopup="menu"><span class="rail-ic"><svg class="ic"><use href="vendor/lucide/icons.svg#menu"/></svg></span>Plus</button>
@@ -84,11 +88,22 @@
 
     <!-- Bas de la carte : chargement, contexte du mode, dock d'outils -->
     <div class="surcouche pile-bas">
+      <div class="tournee-pilule verre" id="tournee-pilule" hidden role="status" aria-label="Tournée en cours">
+        <span class="tp-point" aria-hidden="true"></span>
+        <span class="tp-chrono num">0:00</span>
+        <span class="tp-stat"><svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#house"/></svg><strong class="tp-portes num">0</strong></span>
+        <span class="tp-stat"><svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#message-circle"/></svg><strong class="tp-contacts num">0</strong></span>
+        <span class="tp-objectif jauge" hidden title="Objectif de portes"><span></span></span>
+        <button type="button" class="btn btn-fantome btn-icone btn-sm tp-pause" aria-label="Mettre en pause"><svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#pause"/></svg></button>
+        <button type="button" class="btn btn-sm tp-fin" aria-label="Terminer la tournée"><svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#square"/></svg>Terminer</button>
+      </div>
       <button type="button" class="pastille-charger verre" id="pastille-charger" hidden></button>
       <div class="contexte verre" id="contexte" hidden></div>
       <div class="dock verre" id="dock" role="toolbar" aria-label="Outils de prospection">
+        <button type="button" class="outil outil-tournee" id="btn-tournee" aria-pressed="false" aria-label="Démarrer une tournée" data-tip="Démarrer une tournée"><svg class="ic"><use href="vendor/lucide/icons.svg#play"/></svg></button>
+        <span class="sep" aria-hidden="true"></span>
         <button type="button" class="outil" data-mode="consulter" aria-pressed="true" aria-label="Consulter" data-tip="Consulter · V"><svg class="ic"><use href="vendor/lucide/icons.svg#mouse-pointer-2"/></svg></button>
-        <button type="button" class="outil" data-mode="tournee" aria-pressed="false" aria-label="Tournée rapide" data-tip="Tournée rapide · T"><svg class="ic"><use href="vendor/lucide/icons.svg#zap"/></svg></button>
+        <button type="button" class="outil" data-mode="tournee" aria-pressed="false" aria-label="Pointage rapide" data-tip="Pointage rapide · T"><svg class="ic"><use href="vendor/lucide/icons.svg#zap"/></svg></button>
         <button type="button" class="outil" data-mode="selection" aria-pressed="false" aria-label="Sélection multiple" data-tip="Sélection multiple · S"><svg class="ic"><use href="vendor/lucide/icons.svg#square-dashed"/></svg></button>
         <button type="button" class="outil" data-mode="ajouter" aria-pressed="false" aria-label="Ajouter une maison" data-tip="Ajouter une maison · A"><svg class="ic"><use href="vendor/lucide/icons.svg#map-pin-plus"/></svg></button>
         <span class="sep" aria-hidden="true"></span>
@@ -105,6 +120,11 @@
       <button type="button" class="btn btn-primaire btn-lg" id="accueil-chercher"><svg class="ic"><use href="vendor/lucide/icons.svg#search"/></svg>Rechercher une adresse</button>
      </div>
     </div>
+
+    <!-- Tournées et défis -->
+    <section class="vue-tableau" id="vue-tournees" hidden aria-labelledby="titre-tournees"></section>
+    <!-- Base des maisons -->
+    <section class="vue-tableau vue-base" id="vue-base" hidden aria-labelledby="titre-base"></section>
 
     <!-- Tableau de bord -->
     <section class="vue-tableau" id="tableau" hidden aria-labelledby="titre-tableau"></section>
@@ -181,7 +201,7 @@
               <li>Recherchez votre ville ou votre rue (<span class="kbd">Ctrl K</span>) et zoomez sur les maisons.</li>
               <li>Touchez <strong>« Charger les maisons »</strong> en bas de la carte.</li>
               <li><strong>Secteurs</strong> : dessinez votre zone pour suivre le pourcentage couvert.</li>
-              <li>Sur le terrain, passez en <strong>Tournée rapide</strong> et touchez chaque maison faite.</li>
+              <li>Sur le terrain, <strong>démarrez une tournée</strong> (bouton lecture du dock) et passez en <strong>pointage rapide</strong> : touchez chaque maison faite.</li>
               <li>Suivez vos résultats dans <strong>Bilan</strong> et vos personnes à recontacter dans <strong>Rappels</strong>.</li>
             </ol>
             <button type="button" class="btn btn-sm" id="aide-revoir" style="margin-top:12px"><svg class="ic"><use href="vendor/lucide/icons.svg#book-open"/></svg>Revoir la présentation</button>
@@ -190,7 +210,8 @@
             <h3><svg class="ic"><use href="vendor/lucide/icons.svg#mouse-pointer-2"/></svg>Les outils</h3>
             <ul>
               <li><strong>Consulter</strong> : touchez une maison pour ouvrir sa fiche (statut, contact, note, historique).</li>
-              <li><strong>Tournée rapide</strong> : choisissez un statut, chaque maison touchée le reçoit. <em>Annuler</em> est proposé à chaque fois.</li>
+              <li><strong>Pointage rapide</strong> : choisissez un statut, chaque maison touchée le reçoit. <em>Annuler</em> est proposé à chaque fois.</li>
+              <li><strong>Tournée</strong> (bouton lecture) : chronomètre, portes, contacts et distance de votre sortie ; bilan, records et défis à la fin.</li>
               <li><strong>Sélection multiple</strong> : entourez plusieurs maisons (rectangle ou lasso) pour leur appliquer un statut.</li>
               <li><strong>Ajouter</strong> : placez une maison absente de la carte.</li>
             </ul>
@@ -208,7 +229,7 @@
             <h3><svg class="ic"><use href="vendor/lucide/icons.svg#keyboard"/></svg>Raccourcis clavier</h3>
             <div class="raccourcis">
               <span>Rechercher / actions</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">K</span></span>
-              <span>Consulter · Tournée · Sélection · Ajouter</span><span class="touches"><span class="kbd">V</span><span class="kbd">T</span><span class="kbd">S</span><span class="kbd">A</span></span>
+              <span>Consulter · Pointage rapide · Sélection · Ajouter</span><span class="touches"><span class="kbd">V</span><span class="kbd">T</span><span class="kbd">S</span><span class="kbd">A</span></span>
               <span>Choisir un statut (tournée ou fiche ouverte)</span><span class="touches"><span class="kbd">1</span>…<span class="kbd">9</span></span>
               <span>Annuler</span><span class="touches"><span class="kbd">Ctrl</span><span class="kbd">Z</span></span>
               <span>Fermer / revenir</span><span class="touches"><span class="kbd">Échap</span></span>
@@ -246,6 +267,8 @@
 </div>
 
 <div class="menu-plus" id="menu-plus" role="menu" hidden>
+  <button type="button" role="menuitem" data-nav="tableau"><svg class="ic"><use href="vendor/lucide/icons.svg#layout-dashboard"/></svg>Bilan</button>
+  <button type="button" role="menuitem" data-nav="base"><svg class="ic"><use href="vendor/lucide/icons.svg#table"/></svg>Base des maisons</button>
   <button type="button" role="menuitem" data-nav="donnees"><svg class="ic"><use href="vendor/lucide/icons.svg#database"/></svg>Données et sauvegarde</button>
   <button type="button" role="menuitem" data-nav="aide"><svg class="ic"><use href="vendor/lucide/icons.svg#circle-help"/></svg>Aide</button>
   <button type="button" role="menuitem" id="btn-theme-mobile"><svg class="ic"><use href="vendor/lucide/icons.svg#sun"/></svg>Thème : <span class="libelle-theme">Auto</span></button>
@@ -269,6 +292,9 @@
 <dialog class="modale" id="dlg-import" aria-labelledby="dlg-import-titre"></dialog>
 <!-- Confirmation -->
 <dialog class="modale" id="dlg-confirmer" aria-labelledby="dlg-confirmer-titre"></dialog>
+<!-- Tournées : démarrage et bilan -->
+<dialog class="modale" id="dlg-tournee" aria-labelledby="dlg-tournee-titre"></dialog>
+<dialog class="modale modale-large" id="dlg-bilan-tournee" aria-labelledby="dlg-bilan-titre"></dialog>
 <!-- Gestion des étiquettes -->
 <dialog class="modale" id="dlg-etiquettes" aria-labelledby="dlg-etiquettes-titre"></dialog>
 <!-- Bienvenue -->
@@ -295,6 +321,12 @@
 <script src="js/rappels-ui.js" defer></script>
 <script src="js/stats.js" defer></script>
 <script src="js/stats-ui.js" defer></script>
+<script src="js/tournees.js" defer></script>
+<script src="js/defis.js" defer></script>
+<script src="js/celebration.js" defer></script>
+<script src="js/progression.js" defer></script>
+<script src="js/tournees-ui.js" defer></script>
+<script src="js/base.js" defer></script>
 <script src="js/outils.js" defer></script>
 <script src="js/palette.js" defer></script>
 <script src="js/store.js" defer></script>

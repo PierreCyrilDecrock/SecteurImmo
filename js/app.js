@@ -18,6 +18,9 @@
   Outils.init(carte);
   StatsUi.init();
   Position.init(carte, alerter);
+  Tournees.init();
+  TourneesUi.init();
+  Base.init();
   Palette.init();
   Pwa.init();
   Secteurs.surStructure(function () { Store.enregistrerSecteurs(Secteurs.exporter()); });
@@ -37,6 +40,8 @@
       CarteImmo.appliquerPrefs(d.prefs);
       Store.chargerMeta(d.meta);
       if (d.objectif) StatsUi.definirObjectif(d.objectif, true);
+      if (d.tournees) Tournees.charger(d.tournees, 'remplacer');
+      Base.chargerPreferences(d.base);
       Store.demarrer();
       // Préférences de vue : enregistrées avec un délai pour ne pas écrire à chaque déplacement
       CarteImmo.definirSurPrefs(function (p) { clearTimeout(timerPrefs); timerPrefs = setTimeout(function () { Store.enregistrerPrefs(p); }, 800); });
@@ -47,6 +52,8 @@
     RappelsUi.dessiner();
     CarteUi.majPastille(); CarteUi.majAccueil();
     Aide.init();
+    Progression.init(d && d.progression);
+    TourneesUi.verifierOubli();
     // Protection du stockage : demandée automatiquement dès qu'il y a des données à protéger
     // (sans effet visible sur Chrome ; Firefox peut afficher une demande d'autorisation)
     var protectionDemandee = false;

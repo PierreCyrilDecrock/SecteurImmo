@@ -9,6 +9,7 @@ var Position = (function () {
   'use strict';
 
   var map, alerter = function () {}, btn;
+  var ecouteursFix = [];   // reçoivent chaque position (ex. distance parcourue pendant une tournée)
   var idSuivi = null, suivre = false, derniere = null, point = null, cercle = null, verrou = null, premier = true;
 
   // ---------- Écran toujours allumé pendant le suivi (si le navigateur le permet) ----------
@@ -45,6 +46,7 @@ var Position = (function () {
     derniere = [p.coords.latitude, p.coords.longitude];
     if (etaitVide) majBouton();
     var ll = L.latLng(derniere);
+    ecouteursFix.forEach(function (cb) { cb(derniere, p.coords.accuracy || 50); });
     dessiner(ll, Math.min(p.coords.accuracy || 20, 500));
     if (premier) { premier = false; map.setView(ll, Math.max(map.getZoom(), 18)); }
     else if (suivre) map.panTo(ll, { animate: true, duration: 0.5 });
@@ -84,5 +86,10 @@ var Position = (function () {
     majBouton();
   }
 
-  return { init: init, courante: function () { return derniere; } };
+  return {
+    init: init, courante: function () { return derniere; }, surFix: function (cb) { ecouteursFix.push(cb); },
+    active: function () { return idSuivi !== null; },
+    // Démarre le suivi s'il est arrêté (ex. au début d'une tournée), sans recentrer brutalement la carte
+    demarrerSiArrete: function () { if (idSuivi === null) clic(); }
+  };
 })();

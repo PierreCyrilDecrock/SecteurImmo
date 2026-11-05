@@ -1,0 +1,69 @@
+/*
+ * base.css – Vue « Base des maisons » : barre d'outils, filtres, tableau virtualisé à en-tête collant
+ * et première colonne fixe, sélection et actions groupées.
+ */
+.vue-base { display: flex; flex-direction: column; overflow: hidden; }
+.base-contenu { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; max-width: none; width: 100%; padding: 24px 28px 20px; }
+.base-contenu .tableau-tete { margin-bottom: 0; }
+.base-barre { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.base-barre .saisie-icone { flex: 1; min-width: 220px; }
+.base-barre .btn .badge { position: static; margin-left: 2px; }
+.base-ancre { position: relative; }
+.base-pop { position: absolute; z-index: 40; top: calc(100% + 6px); right: 0; width: 290px; max-height: 60vh; overflow-y: auto; padding: 12px; border-radius: var(--r-lg); animation: apparait var(--t) var(--ease-ressort); transform-origin: top right; }
+.base-pop h3 { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--texte-3); margin-bottom: 8px; }
+.base-pop .actions { display: flex; gap: 6px; margin-top: 10px; }
+.liste-colonnes, .liste-vues { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.liste-colonnes li, .liste-vues li { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 4px; border-radius: 8px; }
+.liste-colonnes li:hover, .liste-vues li:hover { background: var(--surface-survol); }
+.liste-colonnes label { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.lien-vue { flex: 1; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px 4px; text-align: left; font-size: 13.5px; font-weight: 550; color: var(--texte); }
+.base-pop-vues .ajout-etiquette { margin-top: 10px; }
+.base-pop-vues .ajout-etiquette .saisie { min-height: 34px; font-size: 13.5px; }
+
+/* Filtres */
+.base-filtres { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px 22px; padding: 16px 18px; animation: monte var(--t) var(--ease); }
+.groupe-filtre { display: grid; gap: 8px; align-content: start; }
+.groupe-filtre > .etiquette { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.segments-sm button { min-height: 24px; padding: 0 8px; font-size: 11.5px; }
+.ligne-champs { display: flex; gap: 8px; }
+.champ-mini { display: grid; gap: 4px; flex: 1; font-size: 12px; color: var(--texte-3); }
+.champ-mini .saisie { min-height: 34px; padding: 4px 8px; font-size: 13.5px; }
+.base-filtres-actifs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.puce-active { background: var(--accent-doux); border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--texte); }
+
+/* Sélection */
+.base-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-radius: var(--r-lg); animation: monte var(--t) var(--ease-ressort); }
+.base-selection .nb-sel { margin-right: 6px; font-size: 13.5px; }
+
+/* Tableau virtualisé */
+.base-zone { position: relative; flex: 1; min-height: 240px; overflow: auto; border-radius: var(--r-lg); overscroll-behavior: contain; }
+.base-tete { position: sticky; top: 0; z-index: 3; }
+.base-corps { position: relative; }
+.base-ligne { display: flex; height: 46px; border-bottom: 1px solid var(--bord); background: var(--surface); }
+.base-corps .base-ligne { position: absolute; left: 0; right: 0; top: 0; cursor: pointer; transition: background var(--t-rapide); }
+.base-corps .base-ligne:hover, .base-corps .base-ligne:hover .base-cellule { background: var(--surface-2); }
+.base-ligne.choisie, .base-ligne.choisie .base-cellule { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.base-tete-ligne { background: var(--surface-2); }
+.base-tete-ligne .base-cellule { background: var(--surface-2); color: var(--texte-3); font-size: 12px; font-weight: 650; }
+.base-cellule { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13.5px; background: inherit; }
+.base-cellule.num { justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.base-case { width: 44px; justify-content: center; padding: 0; position: sticky; left: 0; z-index: 1; }
+.base-fixe { position: sticky; left: 44px; z-index: 1; box-shadow: 1px 0 0 var(--bord); font-weight: 600; }
+.base-tete-ligne .base-fixe { font-weight: 650; }
+.base-case input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.base-cellule .etiquette-statut { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.base-cellule .tri { gap: 4px; color: inherit; white-space: nowrap; }
+.base-cellule .tri .ic { color: var(--accent); }
+.ordre-tri { font-size: 10px; color: var(--accent); font-weight: 700; }
+.cellule-puces { display: flex; gap: 4px; overflow: hidden; }
+.cellule-puces .mini-etiquette { margin: 0; white-space: nowrap; }
+.lien-tel { color: var(--accent); text-decoration: none; }
+.lien-tel:hover { text-decoration: underline; }
+.base-vide { position: absolute; left: 0; right: 0; top: 70px; }
+
+@media (max-width: 767px) {
+  .base-contenu { padding: 14px 10px 10px; }
+  .base-filtres { grid-template-columns: 1fr; padding: 14px; }
+  .base-pop { right: auto; left: 0; width: min(290px, calc(100vw - 30px)); }
+  .base-barre .btn { padding: 0 10px; }
+}

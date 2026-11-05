@@ -8,7 +8,7 @@ var Aide = (function () {
   var CLE = 'secteurimmo-aide';   // mémorise que la présentation a été vue (localStorage, par navigateur)
   var DIAPOS = [
     { ic: 'map-pinned', t: 'Bienvenue sur SecteurImmo', p: 'Votre carnet de prospection sur la carte : chaque maison visitée est cochée, chaque secteur suivi à la porte près.' },
-    { ic: 'zap', t: 'Une tournée en un geste', p: 'Passez en « Tournée rapide », choisissez un statut et touchez les maisons au fil de la rue. Une erreur ? « Annuler » est proposé à chaque fois.' },
+    { ic: 'zap', t: 'Une tournée en un geste', p: 'Démarrez une tournée, passez en « Pointage rapide » et touchez les maisons au fil de la rue. Chrono, records et défis suivent votre progression.' },
     { ic: 'layout-dashboard', t: 'Vos résultats au quotidien', p: 'Bilan de la semaine, objectif, personnes à rappeler : tout est calculé pour vous. Vos données restent sur cet appareil, sans compte ni serveur.' }
   ];
   var dlg, index = 0;

@@ -175,6 +175,13 @@
   .outil { width: 48px; height: 48px; }
   .contexte { width: calc(100vw - 20px); }
   .choix-statuts.compacts .choix-statut .kbd { display: none; }
+  /* Bandeau compact : une seule ligne de statuts qui défile, pour laisser la carte visible */
+  .contexte { padding: 10px 10px 10px 12px; }
+  .contexte-tete { margin-bottom: 8px; }
+  .contexte-tete .aide { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contexte .choix-statuts.compacts { flex-wrap: nowrap; overflow-x: auto; margin: 0 -10px 0 -12px; padding: 0 10px 2px 12px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .contexte .choix-statuts.compacts::-webkit-scrollbar { display: none; }
+  .contexte .choix-statuts.compacts .choix-statut { flex: none; scroll-snap-align: start; }
   .popover-fonds { width: 250px; }
 }
 @media (pointer: coarse) { .dock .kbd, .contexte .kbd { display: none; } }

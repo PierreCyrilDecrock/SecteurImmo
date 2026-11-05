@@ -129,9 +129,10 @@ var Secteurs = (function () {
     });
   }
 
+  var evidencePosee = false;   // n'efface la mise en évidence que si c'est nous qui l'avons posée
   function majTrou() {
-    if (trouActif && parId(trouActif)) CarteImmo.mettreEnEvidence(nonFaits(trouActif));
-    else { trouActif = null; CarteImmo.mettreEnEvidence([]); }
+    if (trouActif && parId(trouActif)) { CarteImmo.mettreEnEvidence(nonFaits(trouActif)); evidencePosee = true; }
+    else { trouActif = null; if (evidencePosee) { CarteImmo.mettreEnEvidence([]); evidencePosee = false; } }
   }
 
   // Tout recalculer (après chargement de bâtiments, ajout/suppression de secteur, import…)

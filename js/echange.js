@@ -25,7 +25,7 @@ var Echange = (function () {
     return {
       app: 'SecteurImmo', schema: Store.SCHEMA, exporteLe: new Date().toISOString(),
       records: recs, manuels: man, adresses: adresses, batiments: batiments,
-      secteurs: Secteurs.exporter(), etiquettes: Etiquettes.exporter()
+      secteurs: Secteurs.exporter(), etiquettes: Etiquettes.exporter(), tournees: { liste: Tournees.exporter().liste }
     };
   }
 
@@ -68,6 +68,7 @@ var Echange = (function () {
       } else propre.ignores++;
     });
     propre.etiquettes = Etiquettes.nettoyer(d.etiquettes);
+    propre.tournees = Tournees.nettoyer(d.tournees);
     var sec = Secteurs.nettoyer(d.secteurs);
     propre.secteurs = sec.donnees; propre.ignores += sec.ignores;
     return propre;
@@ -185,6 +186,7 @@ var Echange = (function () {
     Store.enregistrerBatiments(propre.batiments);
     var bilan = Statuts.charger(propre, mode, mode === 'remplacer');
     Secteurs.charger(propre.secteurs, mode);
+    if (propre.tournees.liste.length) Tournees.charger({ liste: propre.tournees.liste, active: mode === 'remplacer' ? null : Tournees.active() }, mode === 'remplacer' ? 'remplacer' : 'fusionner');
     if (propre.etiquettes.length || mode === 'remplacer') Etiquettes.charger(propre.etiquettes, mode === 'remplacer' && propre.etiquettes.length ? 'remplacer' : 'fusionner');
     CarteImmo.afficherBatiments(propre.batiments);
     CarteImmo.synchroniserManuels(Statuts.manuels());

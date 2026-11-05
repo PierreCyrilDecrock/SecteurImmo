@@ -69,7 +69,7 @@ var Outils = (function () {
     if (mode === 'consulter') return;
 
     if (mode === 'tournee') {
-      contexte.appendChild(teteContexte('zap', 'Tournée rapide', 'Touchez chaque maison faite'));
+      contexte.appendChild(teteContexte('zap', 'Pointage rapide', 'Touchez chaque maison faite'));
       contexte.appendChild(puces(statutTournee, function (sid) { statutTournee = sid; setMode('tournee'); }, PORTE.indexOf(statutTournee) >= 0));
     } else if (mode === 'ajouter') {
       contexte.appendChild(teteContexte('map-pin-plus', 'Ajouter une maison', 'Touchez la carte à son emplacement'));
