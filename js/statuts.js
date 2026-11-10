@@ -1,9 +1,12 @@
 /*
  * statuts.js – Modèle de données de la prospection.
  *
- * Pour chaque maison (clé = id OSM, ex. "way/123", ou "man/…" pour une maison ajoutée à la main) :
- * { statut, date, note, logements, nom, tel, historique: [{ statut, date }], etiquettes: [ids],
- *   occupant, projet, echeance, potentiel }.
+ * Pour chaque bâtiment (clé = id IGN « bdt/… », id OSM « way/… », ou « man/… » pour une maison ajoutée
+ * à la main) : { statut, date, note, logements, nom, tel, historique: [{ statut, date, n? }], etiquettes: [ids],
+ *   occupant, projet, echeance, potentiel, type?, lots?: [clés], digicode, interphone, gardien, boites, syndic }.
+ * Immeubles : chaque logement détaillé est une fiche à part, de clé « <bâtiment>#<clé> », avec un libellé
+ * (« Apt 12 ») et les mêmes champs qu'une maison. Le statut du bâtiment s'applique aux logements qui ne
+ * sont pas détaillés. Une « porte » = un logement : n (historique, passages) = nombre de logements concernés.
  * Toute modification passe par modifier() afin de pouvoir être annulée (Ctrl+Z).
  * Expose l'objet global Statuts.
  */
@@ -46,7 +49,10 @@ var Statuts = (function () {
     return t ? t[1] : '';
   }
   // Champs dont la présence justifie de garder une fiche même « non faite »
-  var CHAMPS_INFO = ['note', 'logements', 'nom', 'tel', 'historique', 'etiquettes', 'occupant', 'projet', 'echeance', 'potentiel'];
+  var CHAMPS_INFO = ['note', 'logements', 'nom', 'tel', 'historique', 'etiquettes', 'occupant', 'projet', 'echeance', 'potentiel',
+    'type', 'lots', 'libelle', 'digicode', 'interphone', 'gardien', 'boites', 'syndic'];
+  // Statut affiché pour un immeuble dont les logements ont des statuts différents : le plus avancé
+  var RANG = { aucun: 0, prospectus: 1, absent: 2, refus: 3, concurrent: 4, rappeler: 5, contact: 6, estimation: 7, mandat: 8 };
 
   var parId = {};
   LISTE.forEach(function (s) { parId[s.id] = s; });
@@ -80,10 +86,50 @@ var Statuts = (function () {
   function statutDe(id) { return records[id] ? (records[id].statut || 'aucun') : 'aucun'; }
   function get(id) { return records[id] || null; }
 
+  // ---- Logements (immeubles) ----
+  function estLot(id) { return id.indexOf('#') > 0; }
+  function parent(id) { var i = id.indexOf('#'); return i > 0 ? id.slice(0, i) : id; }
+  function lotsDe(id) { var r = records[id]; return r && r.lots ? r.lots.map(function (k) { return id + '#' + k; }) : []; }
+  function aDesLogements(id) { var r = records[id]; return !!(r && r.lots && r.lots.length); }
+  function aUneFiche(id) { return !!records[id]; }
+  // Portes représentées par le statut propre de la fiche : 1 pour un logement ; pour un bâtiment,
+  // ses logements non détaillés (une maison = 1)
+  function poids(id) {
+    if (estLot(id)) return 1;
+    var nl = (records[id] && records[id].lots || []).length, n = TypesBati.logementsDe(id);
+    return nl ? Math.max(0, n - nl) : Math.max(1, n);
+  }
+  // Logements d'un bâtiment : { total, faits }
+  function avancement(id) {
+    var p = poids(id), lots = lotsDe(id), f = statutDe(id) !== 'aucun' ? p : 0;
+    lots.forEach(function (l) { if (statutDe(l) !== 'aucun') f++; });
+    return { total: p + lots.length, faits: f };
+  }
+  // Statut à afficher sur la carte : le plus avancé parmi les logements
+  function statutAffiche(id) {
+    var lots = lotsDe(id);
+    if (!lots.length) return statutDe(id);
+    var s = poids(id) > 0 ? statutDe(id) : 'aucun';
+    lots.forEach(function (l) { var x = statutDe(l); if (RANG[x] > RANG[s]) s = x; });
+    return s;
+  }
+  // Logements par statut pour des bâtiments donnés (légende, avancement)
+  function compterLogements(ids) {
+    var c = {}; LISTE.forEach(function (st) { c[st.id] = 0; });
+    var total = 0;
+    ids.forEach(function (id) {
+      var p = poids(id); c[statutDe(id)] += p; total += p;
+      lotsDe(id).forEach(function (l) { c[statutDe(l)]++; total++; });
+    });
+    c.total = total;
+    return c;
+  }
+
   // Supprime l'enregistrement s'il n'apporte plus aucune information
+  function vide(r) { return (r.statut || 'aucun') === 'aucun' && !CHAMPS_INFO.some(function (k) { return Array.isArray(r[k]) ? r[k].length : r[k]; }); }
   function nettoyer(id) {
     var r = records[id];
-    if (r && (r.statut || 'aucun') === 'aucun' && !CHAMPS_INFO.some(function (k) { return Array.isArray(r[k]) ? r[k].length : r[k]; })) delete records[id];
+    if (r && vide(r)) delete records[id];
   }
 
   /*
@@ -103,7 +149,7 @@ var Statuts = (function () {
       var patch = patchs[id];
       var ancien = records[id];
       var r = copie(ancien) || {};
-      var statutAvant = r.statut || 'aucun';
+      var statutAvant = r.statut || 'aucun', n = poids(id);
       Object.keys(patch).forEach(function (k) {
         var v = patch[k];
         if (v === undefined || v === '' || v === null || (Array.isArray(v) && !v.length)) delete r[k]; else r[k] = Array.isArray(v) ? v.slice() : v;
@@ -113,12 +159,14 @@ var Statuts = (function () {
         if ((patch.statut || 'aucun') === 'aucun') delete r.date; else r.date = maintenant();
       }
       // Historique des passages : une entrée par changement de statut (les 30 dernières)
-      if (statutChange && (r.statut || 'aucun') !== 'aucun') {
-        r.historique = (r.historique || []).concat([{ statut: r.statut, date: r.date }]).slice(-30);
-        passages.push({ id: id, statut: r.statut, t: Date.now() });
+      if (statutChange && (r.statut || 'aucun') !== 'aucun' && n > 0) {
+        var entree = { statut: r.statut, date: r.date };
+        if (n !== 1) entree.n = n;
+        r.historique = (r.historique || []).concat([entree]).slice(-30);
+        passages.push(n !== 1 ? { id: id, statut: r.statut, t: Date.now(), n: n } : { id: id, statut: r.statut, t: Date.now() });
       } else if (!statutChange && patch.date !== undefined && r.historique && r.historique.length) {
         var dernier = r.historique[r.historique.length - 1];
-        if (dernier.statut === r.statut) r.historique[r.historique.length - 1] = { statut: r.statut, date: r.date };
+        if (dernier.statut === r.statut) r.historique[r.historique.length - 1] = Object.assign({}, dernier, { date: r.date });
       }
       if (r.historique && !r.historique.length) delete r.historique;
       if (JSON.stringify(r) === JSON.stringify(ancien || {})) return; // rien n'a changé
@@ -148,6 +196,65 @@ var Statuts = (function () {
     return true;
   }
   function peutAnnuler() { return pile.length > 0; }
+
+  // Remplace des fiches telles quelles ({ id: fiche | null }), en une opération annulable
+  function ecrireBrut(nouveaux) {
+    var avant = {};
+    Object.keys(nouveaux).forEach(function (id) {
+      avant[id] = copie(records[id]);
+      if (nouveaux[id]) records[id] = nouveaux[id]; else delete records[id];
+    });
+    pile.push({ avant: avant, passages: [] });
+    if (pile.length > PILE_MAX) pile.shift();
+    notifier(Object.keys(nouveaux));
+  }
+
+  // Ajoute un logement détaillé à un immeuble ; il reprend le statut des logements non détaillés
+  function ajouterLot(id, libelle) {
+    var r = copie(records[id]) || {}, k = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    var herite = statutDe(id) !== 'aucun' && poids(id) > 0;
+    r.lots = (r.lots || []).concat([k]);
+    var lot = { libelle: String(libelle || '').trim().slice(0, 60) || 'Logement ' + r.lots.length };
+    if (herite) { lot.statut = r.statut; lot.date = r.date; }
+    var n = {}; n[id] = r; n[id + '#' + k] = lot;
+    ecrireBrut(n);
+    return id + '#' + k;
+  }
+  function supprimerLot(lotId) {
+    var p = parent(lotId), r = copie(records[p]);
+    if (!r || !r.lots) return;
+    var k = lotId.slice(p.length + 1);
+    r.lots = r.lots.filter(function (x) { return x !== k; });
+    if (!r.lots.length) delete r.lots;
+    var n = {}; n[p] = vide(r) ? null : r; n[lotId] = null;
+    ecrireBrut(n);
+  }
+
+  /*
+   * Change la clé de fiches ({ ancienId: nouvelId }), ex. bâtiment OpenStreetMap remplacé par le bâtiment IGN
+   * correspondant ; les logements suivent. En cas de doublon, la fiche la plus récente est gardée.
+   * Vide l'historique d'annulation. Renvoie le nombre de bâtiments dont la fiche a été déplacée.
+   */
+  function renommer(corr) {
+    var n = 0, touches = [], adrTouchees = [];
+    Object.keys(corr).forEach(function (ancien) {
+      var nouveau = corr[ancien];
+      if (records[ancien]) n++;
+      [ancien].concat(lotsDe(ancien)).forEach(function (id) {
+        var r = records[id]; if (!r) return;
+        var cible = nouveau + id.slice(ancien.length);
+        if (!records[cible] || (records[cible].date || '') <= (r.date || '')) records[cible] = r;
+        delete records[id];
+        touches.push(id, cible);
+      });
+      if (adresses[ancien]) { if (!adresses[nouveau]) { adresses[nouveau] = adresses[ancien]; adrTouchees.push(nouveau); } delete adresses[ancien]; adrTouchees.push(ancien); }
+    });
+    if (!touches.length && !adrTouchees.length) return 0;
+    pile = [];
+    signaler('adresses', adrTouchees);
+    notifier(touches);
+    return n;
+  }
 
   // ---- Points ajoutés manuellement (maison absente d'OpenStreetMap) ----
   function ajouterManuel(lat, lon) {
@@ -210,7 +317,9 @@ var Statuts = (function () {
   return {
     charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
     LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, CONTACTS: CONTACTS, QUALIF: QUALIF, libelleQualif: libelleQualif, parId: function (id) { return parId[id] || parId.aucun; },
-    get: get, statutDe: statutDe, modifier: modifier, modifierChacun: modifierChacun, annuler: annuler, peutAnnuler: peutAnnuler,
+    get: get, statutDe: statutDe, modifier: modifier,
+    estLot: estLot, parent: parent, lotsDe: lotsDe, aDesLogements: aDesLogements, aUneFiche: aUneFiche, poids: poids, avancement: avancement,
+    statutAffiche: statutAffiche, compterLogements: compterLogements, ajouterLot: ajouterLot, supprimerLot: supprimerLot, renommer: renommer, modifierChacun: modifierChacun, annuler: annuler, peutAnnuler: peutAnnuler,
     surChangement: surChangement, surPassages: function (cb) { ecouteursPassages.push(cb); }, maintenant: maintenant,
     ajouterManuel: ajouterManuel, supprimerManuel: supprimerManuel,
     manuels: function () { return manuels; },

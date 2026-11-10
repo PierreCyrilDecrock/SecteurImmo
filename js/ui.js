@@ -124,7 +124,17 @@ var Ui = (function () {
       tete.appendChild(m);
       var h = el('h2', null, o.titre); h.id = 'dlg-confirmer-titre'; tete.appendChild(h);
       dlg.appendChild(tete);
-      dlg.appendChild(el('div', 'modale-corps', o.message || ''));
+      var corps = el('div', 'modale-corps', o.message || '');
+      // Case à cocher facultative : o.case = { texte, coche } ; son état est relu dans o.case.valeur
+      if (o.case) {
+        var lab = el('label', 'interrupteur'); lab.style.marginTop = '14px';
+        var cb = el('input'); cb.type = 'checkbox'; cb.id = 'confirmer-case'; cb.checked = !!o.case.coche;
+        cb.addEventListener('change', function () { o.case.valeur = cb.checked; });
+        o.case.valeur = cb.checked;
+        lab.appendChild(cb); lab.appendChild(el('span', 'piste')); lab.appendChild(document.createTextNode(o.case.texte));
+        corps.appendChild(lab);
+      }
+      dlg.appendChild(corps);
       var pied = el('div', 'modale-pied');
       var resultat = false;
       pied.appendChild(bouton(o.annuler || 'Annuler', 'btn', function () { dlg.close(); }, { id: 'confirmer-non' }));

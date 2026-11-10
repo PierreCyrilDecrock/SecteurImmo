@@ -34,8 +34,9 @@ var RappelsUi = (function () {
     if (ini) av.textContent = ini; else av.appendChild(icone('phone-call', 'ic-sm'));
     c.appendChild(av);
     var tx = el('div', 'cr-texte');
-    tx.appendChild(el('strong', null, e.nom || e.adresse || 'Maison sans adresse'));
-    if (e.nom && e.adresse) tx.appendChild(el('span', 'adresse', e.adresse));
+    var adr = [e.adresse, e.logement].filter(Boolean).join(' · ');
+    tx.appendChild(el('strong', null, e.nom || adr || 'Maison sans adresse'));
+    if (e.nom && adr) tx.appendChild(el('span', 'adresse', adr));
     // Qualification : potentiel, projet, échéance
     var q = el('div', 'cr-qualif');
     if (e.potentiel) {

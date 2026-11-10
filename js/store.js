@@ -12,7 +12,7 @@ var Store = (function () {
 
   var NOM_BASE = 'secteurimmo';
   var VERSION_BASE = 1;
-  var SCHEMA = 5;            // version du format des données (export compris)
+  var SCHEMA = 6;            // version du format des données (export compris)
   var db = null;
   var attente = null;        // écritures en attente : { magasin: { cle: valeur|null } }
   var timer = null;
@@ -52,6 +52,8 @@ var Store = (function () {
     // Schéma 2 -> 3 : fiches enrichies (nom, téléphone, historique des passages) : champs facultatifs, rien à convertir
     // Schéma 3 -> 4 : étiquettes, qualification du contact, statuts commerciaux : champs facultatifs, rien à convertir
     // Schéma 4 -> 5 : tournées (nouvelle liste facultative), rien à convertir
+    // Schéma 5 -> 6 : bâtiments IGN (« bdt/… »), logements détaillés (« id#clé »), types, communes :
+    //   champs facultatifs ; les fiches OpenStreetMap sont rattachées aux bâtiments IGN au téléchargement
     // if (schemaLu < 3) { … }  ← à compléter quand le format changera
     return donnees;
   }
@@ -64,8 +66,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes'), lireCle('tournees'), lireCle('progression'), lireCle('base')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null, tournees: r[11] || null, progression: r[12] || null, base: r[13] || null };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes'), lireCle('tournees'), lireCle('progression'), lireCle('base'), lireCle('telechargements'), lireCle('communes'), lireCle('types')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null, tournees: r[11] || null, progression: r[12] || null, base: r[13] || null, telechargements: r[14] || [], communes: r[15] || [], types: r[16] || null };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });
@@ -135,7 +137,7 @@ var Store = (function () {
       ids.forEach(function (id) {
         if (type === 'records') { var r = Statuts.get(id); planifier('records', id, r ? Object.assign({ id: id }, r) : null); }
         else if (type === 'manuels') { var m = Statuts.manuels()[id]; planifier('manuels', id, m ? { id: id, lat: m.lat, lon: m.lon } : null); }
-        else if (type === 'adresses') { planifier('adresses', id, { id: id, label: Statuts.adresseDe(id) }); }
+        else if (type === 'adresses') { planifier('adresses', id, Statuts.adresseDe(id) ? { id: id, label: Statuts.adresseDe(id) } : null); }
       });
       marquerDepuis();
     });
@@ -144,6 +146,7 @@ var Store = (function () {
   }
 
   function enregistrerBatiments(features) { features.forEach(function (f) { planifier('batiments', f.id, Object.assign({}, f)); }); }
+  function supprimerBatiments(ids) { ids.forEach(function (id) { planifier('batiments', id, null); }); }
   function enregistrerZones(zones) { planifier('kv', 'zones', zones); }
   function kvSet(cle, valeur) { planifier('kv', cle, valeur); }
   // Écriture à part (transaction isolée) : un objet non clonable ne doit pas faire échouer les autres écritures
@@ -182,6 +185,8 @@ var Store = (function () {
       tx.objectStore('kv').put(Secteurs.exporter(), 'secteurs');
       tx.objectStore('kv').put(Etiquettes.exporter(), 'etiquettes');
       tx.objectStore('kv').put(Tournees.exporter(), 'tournees');
+      tx.objectStore('kv').put(Communes.exporter(), 'communes');
+      tx.objectStore('kv').put(TypesBati.exporter(), 'types');
       tx.oncomplete = function () { signaler(true); ok(); };
       tx.onerror = tx.onabort = function () { signaler(false); ok(); };
     });
@@ -199,7 +204,7 @@ var Store = (function () {
 
   return {
     SCHEMA: SCHEMA, init: init, disponible: disponible, etatStockage: etatStockage, demanderPersistance: demanderPersistance, demarrer: demarrer, flush: ecrire, surEtat: surEtat,
-    enregistrerBatiments: enregistrerBatiments, enregistrerZones: enregistrerZones, enregistrerPrefs: enregistrerPrefs,
+    enregistrerBatiments: enregistrerBatiments, supprimerBatiments: supprimerBatiments, enregistrerZones: enregistrerZones, enregistrerPrefs: enregistrerPrefs,
     kvSet: kvSet, enregistrerSecteurs: function (d) { planifier('kv', 'secteurs', d); }, kvSetIsole: kvSetIsole, chargerMeta: chargerMeta, getMeta: getMeta, setMeta: setMeta,
     toutReecrire: toutReecrire, toutEffacer: toutEffacer
   };

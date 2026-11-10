@@ -22,6 +22,7 @@ var Base = (function () {
   var COLONNES = [
     { id: 'adresse', titre: 'Adresse', type: 'texte', l: 230, val: function (r) { return r.adresse || r.rue || ''; }, fixe: true,
       rendu: function (r) { var t = r.adresse || r.rue; if (t) { var x = el('span', null, t); x.title = t; return x; } return el('span', 'sous-titre', 'Adresse inconnue'); } },
+    { id: 'logement', titre: 'Logement', type: 'texte', l: 130, val: function (r) { return r.logement || ''; } },
     { id: 'nom', titre: 'Nom', type: 'texte', l: 160, val: function (r) { return r.nom; } },
     { id: 'tel', titre: 'Téléphone', type: 'texte', l: 140, val: function (r) { return r.tel; },
       rendu: function (r) { if (!r.tel) return null; var a = el('a', 'lien-tel', r.tel); a.href = 'tel:' + r.tel.replace(/[^0-9+]/g, ''); a.addEventListener('click', function (e) { e.stopPropagation(); }); return a; } },
@@ -37,17 +38,17 @@ var Base = (function () {
     { id: 'etiquettes', titre: 'Étiquettes', type: 'liste', l: 200, val: function (r) { return r.etiquettes.map(Etiquettes.nom).filter(Boolean).join(', '); },
       rendu: function (r) { var w = el('span', 'cellule-puces'); r.etiquettes.forEach(function (t) { var x = el('span', 'mini-etiquette', Etiquettes.nom(t)); x.style.setProperty('--c', Etiquettes.couleur(t)); w.appendChild(x); }); return w; } },
     { id: 'note', titre: 'Note', type: 'texte', l: 240, val: function (r) { return r.note; } },
-    { id: 'logements', titre: 'Logements', type: 'nombre', l: 104, val: function (r) { return r.logements || ''; } },
+    { id: 'logements', titre: 'Logements', type: 'nombre', l: 104, val: function (r) { return r.logement ? '' : r.nbLogements || ''; } },
     { id: 'secteurs', titre: 'Secteurs', type: 'liste', l: 160, val: function (r) { return r.secteursNoms; } },
     { id: 'rue', titre: 'Rue', type: 'texte', l: 180, val: function (r) { return r.rue; } },
-    { id: 'type', titre: 'Type', type: 'texte', l: 130, val: function (r) { return r.type; } },
+    { id: 'type', titre: 'Type', type: 'texte', l: 130, val: function (r) { return r.typeLib; } },
     { id: 'tournees', titre: 'Tournées', type: 'nombre', l: 96, val: function (r) { return r.nbTournees; } },
     { id: 'manuel', titre: 'Ajoutée à la main', type: 'bool', l: 150, val: function (r) { return r.manuel ? 'Oui' : ''; } },
     { id: 'lat', titre: 'Latitude', type: 'nombre', l: 110, val: function (r) { return r.lat === null ? '' : r.lat.toFixed(6); } },
     { id: 'lon', titre: 'Longitude', type: 'nombre', l: 110, val: function (r) { return r.lon === null ? '' : r.lon.toFixed(6); } },
     { id: 'id', titre: 'Identifiant', type: 'texte', l: 150, val: function (r) { return r.id; } }
   ];
-  var PAR_DEFAUT = ['adresse', 'nom', 'tel', 'statut', 'date', 'passages', 'potentiel', 'projet', 'etiquettes', 'note'];
+  var PAR_DEFAUT = ['adresse', 'logement', 'nom', 'tel', 'statut', 'date', 'passages', 'potentiel', 'projet', 'etiquettes', 'note'];
   function col(id) { return COLONNES.filter(function (c) { return c.id === id; })[0]; }
   function colonnesVisibles() { return (pref.colonnes || PAR_DEFAUT).map(col).filter(Boolean); }
 
@@ -57,11 +58,10 @@ var Base = (function () {
     var nbT = {};
     Tournees.liste().forEach(function (t) { var vu = {}; t.passages.forEach(function (p) { if (!vu[p.id]) { vu[p.id] = 1; nbT[p.id] = (nbT[p.id] || 0) + 1; } }); });
     lignes = Stats.elementsReels().map(function (e) {
-      var f = DataImmo.batiment(e.id);
       e.passages = e.historique.length; e.premier = e.historique.length ? e.historique[0].date : '';
       e.secteursNoms = e.secteurs.map(function (s) { var x = Secteurs.liste().filter(function (y) { return y.id === s; })[0]; return x ? x.nom : ''; }).filter(Boolean).join(', ');
-      e.type = e.id.indexOf('man/') === 0 ? 'Ajoutée à la main' : (f ? DataImmo.typeBatiment(f.properties) : '');
       e.manuel = e.id.indexOf('man/') === 0; e.nbTournees = nbT[e.id] || 0;
+      e.typeLib = TypesBati.parId(e.type).court;
       return e;
     });
     source = true;
@@ -74,6 +74,8 @@ var Base = (function () {
   function passeFiltres(r) {
     var f = etat.filtres;
     if (f.statut && f.statut.length && f.statut.indexOf(r.statut) < 0) return false;
+    if (f.type && f.type.length && f.type.indexOf(r.type) < 0) return false;
+    if (f.logements && !r.logement) return false;
     var enums = ['potentiel', 'projet', 'echeance', 'occupant'];
     for (var i = 0; i < enums.length; i++) { var k = enums[i]; if (f[k] && f[k].length && f[k].indexOf(r[k] || '—') < 0) return false; }
     if (f.etiquettes && f.etiquettes.length) {
@@ -128,7 +130,7 @@ var Base = (function () {
     filtrees = lignes.filter(function (r) {
       if (!passeFiltres(r)) return false;
       if (!qr) return true;
-      return [r.adresse, r.rue, r.nom, r.tel, r.note, r.secteursNoms, Statuts.parId(r.statut).label, Statuts.libelleQualif('projet', r.projet)]
+      return [r.adresse, r.rue, r.logement, r.typeLib, r.nom, r.tel, r.note, r.secteursNoms, Statuts.parId(r.statut).label, Statuts.libelleQualif('projet', r.projet)]
         .concat(r.etiquettes.map(Etiquettes.nom)).join(' ').toLowerCase().indexOf(qr) >= 0;
     });
     trier();
@@ -141,7 +143,8 @@ var Base = (function () {
   var zone, corpsTable, teteTable, barreSel, compteur, puceFiltres;
 
   function majEntete() {
-    compteur.textContent = Ui.nombre(filtrees.length) + (filtrees.length !== lignes.length ? ' sur ' + Ui.nombre(lignes.length) : '') + ' maison' + (lignes.length > 1 ? 's' : '');
+    var avecLots = lignes.some(function (r) { return r.logement; });
+    compteur.textContent = Ui.nombre(filtrees.length) + (filtrees.length !== lignes.length ? ' sur ' + Ui.nombre(lignes.length) : '') + (avecLots ? ' ligne' : ' bâtiment') + (lignes.length > 1 ? 's' : '') + (avecLots ? ' (bâtiments et logements)' : '');
     var n = nbFiltres();
     puceFiltres.textContent = n ? String(n) : ''; puceFiltres.hidden = !n;
     dessinerPucesActives();
@@ -279,6 +282,7 @@ var Base = (function () {
     pf.innerHTML = '';
     var f = etat.filtres;
     pf.appendChild(groupePuces('Statut', 'statut', Statuts.ORDRE_CHOIX.map(function (s) { return { v: s, t: Statuts.parId(s).court, c: 'var(--st-' + s + ')' }; })));
+    pf.appendChild(groupePuces('Type de bâtiment', 'type', TypesBati.LISTE.map(function (t) { return { v: t.id, t: t.court }; })));
     var vide = { v: '—', t: 'Non renseigné' };
     ['potentiel', 'projet', 'echeance', 'occupant'].forEach(function (k) {
       pf.appendChild(groupePuces(Statuts.QUALIF[k].titre, k, Statuts.QUALIF[k].valeurs.map(function (x) { return { v: x[0], t: x[1], c: k === 'potentiel' ? POT[x[0]][1] : null }; }).concat([vide])));
@@ -315,7 +319,7 @@ var Base = (function () {
     gn.appendChild(ln); pf.appendChild(gn);
     var gb = el('div', 'groupe-filtre'); gb.appendChild(el('span', 'etiquette', 'Informations'));
     var pb = el('div', 'puces');
-    [['avecNom', 'Avec un nom'], ['avecTel', 'Avec un téléphone'], ['avecNote', 'Avec une note'], ['qualifiees', 'Qualifiées'], ['manuelles', 'Ajoutées à la main'], ['jamais', 'Jamais visitées']].forEach(function (x) {
+    [['avecNom', 'Avec un nom'], ['avecTel', 'Avec un téléphone'], ['avecNote', 'Avec une note'], ['qualifiees', 'Qualifiées'], ['logements', 'Logements détaillés'], ['manuelles', 'Ajoutées à la main'], ['jamais', 'Jamais visitées']].forEach(function (x) {
       pb.appendChild(Ui.bouton(x[1], 'puce', function () { f[x[0]] = !f[x[0]]; if (x[0] === 'jamais' && f.jamais) { f.dateDe = ''; f.dateA = ''; } appliquer(); dessinerFiltres(); }, { 'aria-pressed': f[x[0]] ? 'true' : 'false', 'data-filtre': x[0] }));
     });
     gb.appendChild(pb); pf.appendChild(gb);
@@ -327,6 +331,7 @@ var Base = (function () {
     var f = etat.filtres, libs = [];
     function ajouter(t, retirer) { libs.push(1); w.appendChild(Ui.bouton([t, icone('x', 'ic-sm')], 'puce puce-active', function () { retirer(); appliquer(); dessinerFiltres(); }, { 'aria-label': 'Retirer le filtre ' + t })); }
     (f.statut || []).forEach(function (s) { ajouter(Statuts.parId(s).court, function () { bascule('statut', s); }); });
+    (f.type || []).forEach(function (t) { ajouter(TypesBati.parId(t).court, function () { bascule('type', t); }); });
     ['potentiel', 'projet', 'echeance', 'occupant'].forEach(function (k) { (f[k] || []).forEach(function (v) { ajouter(Statuts.QUALIF[k].titre + ' : ' + (v === '—' ? 'non renseigné' : Statuts.libelleQualif(k, v).toLowerCase()), function () { bascule(k, v); }); }); });
     (f.etiquettes || []).forEach(function (t) { ajouter(Etiquettes.nom(t), function () { bascule('etiquettes', t); }); });
     (f.secteurs || []).forEach(function (s) { var x = Secteurs.liste().filter(function (y) { return y.id === s; })[0]; ajouter(s === '—' ? 'Hors secteur' : x ? x.nom : 'Secteur', function () { bascule('secteurs', s); }); });
@@ -334,7 +339,7 @@ var Base = (function () {
     if (f.dateA) ajouter('Jusqu\'au ' + fmtDate(f.dateA), function () { f.dateA = ''; });
     if (f.passagesMin) ajouter('≥ ' + f.passagesMin + ' passage(s)', function () { f.passagesMin = ''; });
     if (f.passagesMax) ajouter('≤ ' + f.passagesMax + ' passage(s)', function () { f.passagesMax = ''; });
-    [['avecNom', 'Avec un nom'], ['avecTel', 'Avec un téléphone'], ['avecNote', 'Avec une note'], ['qualifiees', 'Qualifiées'], ['manuelles', 'Ajoutées à la main'], ['jamais', 'Jamais visitées']]
+    [['avecNom', 'Avec un nom'], ['avecTel', 'Avec un téléphone'], ['avecNote', 'Avec une note'], ['qualifiees', 'Qualifiées'], ['logements', 'Logements détaillés'], ['manuelles', 'Ajoutées à la main'], ['jamais', 'Jamais visitées']]
       .forEach(function (x) { if (f[x[0]]) ajouter(x[1], function () { f[x[0]] = false; }); });
     if (libs.length > 1) w.appendChild(Ui.bouton('Tout effacer', 'btn btn-sm btn-fantome', function () { etat.filtres = {}; appliquer(); dessinerFiltres(); }, { id: 'base-effacer-filtres' }));
     w.hidden = !libs.length;

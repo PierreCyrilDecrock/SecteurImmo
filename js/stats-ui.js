@@ -24,6 +24,8 @@ var StatsUi = (function () {
     var s = Secteurs.liste().filter(function (x) { return x.id === id; })[0];
     return s ? s.nom : '';
   }
+  // Adresse affichée, avec le logement pour un logement d'immeuble
+  function adrLib(e) { return [e.adresse, e.logement].filter(Boolean).join(' · '); }
   function formatDate(d) { if (!d) return ''; var p = d.slice(0, 10).split('-'); return p[2] + '/' + p[1] + '/' + p[0] + (d.length > 10 ? ' ' + d.slice(11, 16) : ''); }
   function bloc(classes, titre, ic, droite) {
     var b = el('section', 'bloc ' + classes);
@@ -202,8 +204,8 @@ var StatsUi = (function () {
       var li = el('li');
       li.appendChild(pucePotentiel(e.potentiel));
       var tx = el('div', 'txt');
-      tx.appendChild(Ui.bouton(e.nom || e.adresse || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
-      tx.appendChild(el('span', 'sous-titre', [e.nom ? e.adresse : '', Statuts.libelleQualif('projet', e.projet), Statuts.libelleQualif('echeance', e.echeance)].filter(Boolean).join(' · ')));
+      tx.appendChild(Ui.bouton(e.nom || adrLib(e) || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
+      tx.appendChild(el('span', 'sous-titre', [e.nom ? adrLib(e) : '', Statuts.libelleQualif('projet', e.projet), Statuts.libelleQualif('echeance', e.echeance)].filter(Boolean).join(' · ')));
       li.appendChild(tx);
       var es = Ui.etiquetteStatut(Statuts.parId(e.statut)); es.classList.add('statut-prospect'); li.appendChild(es);
       if (e.tel) { var a = el('a', 'btn btn-sm btn-icone'); a.href = 'tel:' + e.tel.replace(/[^0-9+]/g, ''); a.setAttribute('aria-label', 'Appeler ' + (e.nom || '')); a.appendChild(icone('phone', 'ic-sm')); li.appendChild(a); }
@@ -231,8 +233,8 @@ var StatsUi = (function () {
       anciens.forEach(function (e) {
         var li = el('li'), j = Math.round((auj - Stats.dateDepuisJour(e.date.slice(0, 10))) / 86400000);
         var tx = el('div', 'txt');
-        tx.appendChild(Ui.bouton(e.nom || e.adresse || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
-        if (e.nom && e.adresse) tx.appendChild(el('span', 'sous-titre', e.adresse));
+        tx.appendChild(Ui.bouton(e.nom || adrLib(e) || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Ouvrir la fiche' }));
+        if (e.nom && adrLib(e)) tx.appendChild(el('span', 'sous-titre', adrLib(e)));
         li.appendChild(tx);
         li.appendChild(el('span', 'anciennete' + (j > 7 ? ' retard' : ''), j <= 0 ? 'auj.' : j + ' j'));
         ul.appendChild(li);
@@ -483,7 +485,7 @@ var StatsUi = (function () {
     if (e.lat === null) { Notif.alerter('Position inconnue pour cette maison.'); return; }
     Coquille.allerVue('carte'); Outils.setMode('consulter');
     CarteImmo.getMap().setView([e.lat, e.lon], 19, { animate: false });
-    if (DataImmo.batiment(e.id) || e.id.indexOf('man/') === 0) Panneau.ouvrir(e.id);
+    if (DataImmo.batiment(Statuts.parent(e.id)) || e.id.indexOf('man/') === 0) Panneau.ouvrir(e.id);
   }
   function blocJournal() {
     var exp = Ui.bouton([icone('download', 'ic-sm'), 'Exporter (CSV)'], 'btn btn-sm', null, { id: 'stats-export' });
@@ -550,8 +552,8 @@ var StatsUi = (function () {
       selection.slice(0, etat.lignes).forEach(function (e) {
         var tr = el('tr');
         tr.appendChild(el('td', 'date', formatDate(e.date)));
-        var td = el('td'); var lien = Ui.bouton(e.nom || e.adresse || e.rue || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Voir sur la carte' });
-        td.appendChild(lien); if (e.nom && e.adresse) { td.appendChild(document.createElement('br')); td.appendChild(el('span', 'sous-titre', e.adresse)); }
+        var td = el('td'); var lien = Ui.bouton(e.nom || adrLib(e) || e.rue || 'Maison', 'lien-ligne', function () { aller(e); }, { title: 'Voir sur la carte' });
+        td.appendChild(lien); if (e.nom && adrLib(e)) { td.appendChild(document.createElement('br')); td.appendChild(el('span', 'sous-titre', adrLib(e))); }
         tr.appendChild(td);
         var ts = el('td'); ts.appendChild(Ui.etiquetteStatut(Statuts.parId(e.statut))); tr.appendChild(ts);
         var tq = el('td', 'qualif');

@@ -1,0 +1,71 @@
+/*
+ * donnees-terrain.css – Téléchargements (carte de progression), communes, types de bâtiments
+ * (légende), immeubles et logements (carte, fiche).
+ */
+
+/* ---------- Carte de progression d'un téléchargement (bas de la carte) ---------- */
+.telechargement { display: flex; align-items: center; gap: 12px; width: min(460px, calc(100vw - 32px)); padding: 10px 10px 10px 14px; border-radius: var(--r-lg); animation: monte var(--t-lent) var(--ease-ressort); }
+.telechargement .tl-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--accent-doux); color: var(--primaire); flex: none; }
+.telechargement.etat-erreur .tl-ic { background: var(--danger-doux); color: var(--danger); }
+.telechargement.etat-pause .tl-ic { background: var(--alerte-doux); color: var(--alerte); }
+.tl-texte { flex: 1; min-width: 0; }
+.tl-titre { display: flex; align-items: baseline; gap: 8px; }
+.tl-titre strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.tl-pct { font-weight: 700; font-size: 13px; }
+.tl-detail { margin-top: 1px; color: var(--texte-2); font-size: 12.5px; line-height: 1.35; }
+.telechargement.etat-erreur .tl-detail { color: var(--danger); }
+.tl-jauge { height: 5px; margin-top: 7px; }
+.tl-file { margin-top: 4px; color: var(--texte-3); font-size: 12px; }
+.tl-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+
+/* ---------- Communes (panneau Secteurs) ---------- */
+.titre-groupe { margin: 4px 0 8px; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--texte-3); }
+.bloc-communes { margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--bord); }
+.champ-recherche-commune { position: relative; display: block; }
+.champ-recherche-commune .ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--texte-3); pointer-events: none; }
+.champ-recherche-commune .saisie { padding-left: 36px; }
+.communes-suggestions { display: grid; gap: 2px; margin-top: 6px; padding: 4px; border: 1px solid var(--bord); border-radius: var(--r); background: var(--surface); box-shadow: var(--ombre-sm); }
+.suggestion-commune { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--texte); }
+.suggestion-commune:hover, .suggestion-commune:focus-visible { background: var(--surface-survol); }
+.suggestion-commune .ic { grid-row: 1 / 3; color: var(--primaire); }
+.suggestion-commune .txt { font-weight: 600; }
+.suggestion-commune small { color: var(--texte-3); font-size: 12px; }
+#communes-liste { margin-top: 10px; }
+.medaillon-commune { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-doux); color: var(--primaire); flex: none; }
+.carte-commune .jauge { margin: 10px 0 8px; }
+.carte-commune .cs-actions { margin-top: 10px; }
+
+/* ---------- Légende : types de bâtiments affichés ---------- */
+.types-legende { grid-column: 1 / -1; padding: 8px 6px 2px; border-top: 1px solid var(--bord); margin-top: 6px; }
+.types-legende .sous-titre { font-size: 12px; margin-bottom: 6px; }
+.puces-types { display: flex; flex-wrap: wrap; gap: 4px; }
+.puce-type { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 9px 0 7px; border: 1px solid var(--bord); border-radius: var(--r-plein); background: var(--surface); color: var(--texte-2); font-size: 12px; font-weight: 600; }
+.puce-type .compte { color: var(--texte-3); font-weight: 600; font-variant-numeric: tabular-nums; }
+.puce-type .compte:empty { display: none; }
+.puce-type[aria-pressed="true"] { border-color: var(--primaire); background: var(--accent-doux); color: var(--texte); }
+.puce-type[aria-pressed="true"] .ic { color: var(--primaire); }
+.puce-type:hover { border-color: var(--bord-fort); }
+
+/* ---------- Carte : pastille « logements faits / logements » des immeubles ---------- */
+.badge-logements { display: flex; align-items: center; justify-content: center; }
+.badge-logements span { display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: var(--r-plein); background: #0f172a; color: #fff; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(15, 23, 42, .35); }
+.badge-logements span .ic { width: 12px; height: 12px; stroke-width: 2.4; }
+.badge-logements.complet span { background: var(--st-contact); }
+.badge-logements span.pop { animation: pop var(--t-lent) var(--ease-ressort); }
+
+/* ---------- Fiche : immeuble et logements ---------- */
+.aide-champ { margin: 6px 0 10px; color: var(--texte-3); font-size: 12.5px; line-height: 1.45; }
+.resume-logements { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 8px; margin-bottom: 10px; }
+.resume-logements strong { font-size: 20px; font-weight: 700; }
+.resume-logements span { color: var(--texte-2); font-size: 13px; }
+.resume-logements .jauge { grid-column: 1 / -1; margin-top: 8px; }
+.liste-logements { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+.ligne-logement { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--bord); border-radius: var(--r); background: var(--surface); color: var(--texte); text-align: left; }
+.ligne-logement:hover { border-color: var(--bord-fort); background: var(--surface-survol); }
+.ligne-logement .pastille { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.ligne-logement .nom-logement { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.ligne-logement .detail { flex: 1; min-width: 0; color: var(--texte-3); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ligne-logement .ic { color: var(--texte-3); flex: none; }
+.ajout-logement { display: flex; gap: 8px; }
+.ajout-logement .saisie { flex: 1; min-width: 0; }
+.fiche-tete > .btn:first-child { align-self: flex-start; margin-right: -4px; }

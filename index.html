@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="css/tableau.css">
   <link rel="stylesheet" href="css/tournees.css">
   <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/donnees-terrain.css">
 </head>
 <body>
 <div class="app">
@@ -98,6 +99,7 @@
         <button type="button" class="btn btn-sm tp-fin" aria-label="Terminer la tournée"><svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#square"/></svg>Terminer</button>
       </div>
       <button type="button" class="pastille-charger verre" id="pastille-charger" hidden></button>
+      <div class="telechargement verre" id="telechargement" hidden role="status" aria-live="polite" aria-label="Téléchargement des bâtiments"></div>
       <div class="contexte verre" id="contexte" hidden></div>
       <div class="dock verre" id="dock" role="toolbar" aria-label="Outils de prospection">
         <button type="button" class="outil outil-tournee" id="btn-tournee" aria-pressed="false" aria-label="Démarrer une tournée" data-tip="Démarrer une tournée"><svg class="ic"><use href="vendor/lucide/icons.svg#play"/></svg></button>
@@ -143,7 +145,18 @@
 
         <!-- Secteurs -->
         <div class="tiroir-section" data-section="secteurs" hidden>
-          <p class="sous-titre" style="margin-bottom:14px">Dessinez vos zones de prospection et suivez leur couverture, maison par maison.</p>
+          <section class="bloc-communes" id="communes-zone" aria-labelledby="titre-communes">
+            <h3 class="titre-groupe" id="titre-communes">Communes</h3>
+            <p class="sous-titre" style="margin-bottom:10px">Téléchargez tous les bâtiments et adresses d'une commune (données IGN).</p>
+            <label class="champ-recherche-commune">
+              <svg class="ic ic-sm"><use href="vendor/lucide/icons.svg#search"/></svg>
+              <input type="search" class="saisie" id="commune-recherche" placeholder="Nom de la commune ou code postal" autocomplete="off" aria-label="Rechercher une commune à télécharger">
+            </label>
+            <div class="communes-suggestions" id="communes-suggestions" hidden></div>
+            <div class="liste-cartes" id="communes-liste"></div>
+          </section>
+          <h3 class="titre-groupe">Mes secteurs</h3>
+          <p class="sous-titre" style="margin-bottom:14px">Dessinez vos zones de prospection et suivez leur couverture, logement par logement.</p>
           <button type="button" class="btn btn-primaire btn-plein" id="secteurs-nouveau" style="margin-bottom:12px"><svg class="ic"><use href="vendor/lucide/icons.svg#plus"/></svg>Nouveau secteur</button>
           <label class="interrupteur" style="margin-bottom:14px"><input type="checkbox" id="secteurs-couleur"><span class="piste"></span>Colorer les secteurs selon leur avancement</label>
           <div class="liste-cartes" id="secteurs-liste"></div>
@@ -198,8 +211,8 @@
           <div class="aide-section">
             <h3><svg class="ic"><use href="vendor/lucide/icons.svg#sparkles"/></svg>Démarrer</h3>
             <ol>
-              <li>Recherchez votre ville ou votre rue (<span class="kbd">Ctrl K</span>) et zoomez sur les maisons.</li>
-              <li>Touchez <strong>« Charger les maisons »</strong> en bas de la carte.</li>
+              <li><strong>Téléchargez votre commune</strong> : <em>Secteurs → Communes</em>, ou tapez son nom dans la recherche (<span class="kbd">Ctrl K</span>). Tous ses bâtiments et adresses (IGN) arrivent en une fois, avec une barre de progression.</li>
+              <li>Ou zoomez sur une rue et touchez <strong>« Charger les maisons de cette zone »</strong> en bas de la carte.</li>
               <li><strong>Secteurs</strong> : dessinez votre zone pour suivre le pourcentage couvert.</li>
               <li>Sur le terrain, <strong>démarrez une tournée</strong> (bouton lecture du dock) et passez en <strong>pointage rapide</strong> : touchez chaque maison faite.</li>
               <li>Suivez vos résultats dans <strong>Bilan</strong> et vos personnes à recontacter dans <strong>Rappels</strong>.</li>
@@ -214,6 +227,15 @@
               <li><strong>Tournée</strong> (bouton lecture) : chronomètre, portes, contacts et distance de votre sortie ; bilan, records et défis à la fin.</li>
               <li><strong>Sélection multiple</strong> : entourez plusieurs maisons (rectangle ou lasso) pour leur appliquer un statut.</li>
               <li><strong>Ajouter</strong> : placez une maison absente de la carte.</li>
+            </ul>
+          </div>
+          <div class="aide-section">
+            <h3><svg class="ic"><use href="vendor/lucide/icons.svg#building-2"/></svg>Bâtiments et immeubles</h3>
+            <ul>
+              <li><strong>Types</strong> : maison, immeuble, habitation avec commerce, entreprise, équipement, annexe… d'après l'IGN. Dans la légende, choisissez les types affichés et comptés ; corrigez un type dans la fiche.</li>
+              <li><strong>Immeubles</strong> : un geste marque tous les logements (prospectus dans toutes les boîtes) ; chaque logement compte pour une porte. <em>Ajoutez un logement</em> pour suivre une personne (statut, contact, rappel) ; notez le digicode, l'interphone, le gardien.</li>
+              <li><strong>Vue éloignée</strong> : la carte montre l'avancement par carreaux (vert = logements faits) ; zoomez pour voir les bâtiments.</li>
+              <li><strong>Téléchargements</strong> : en cas de coupure ou de fermeture, ils reprennent là où ils s'étaient arrêtés ; <em>Pause</em> et <em>Annuler</em> dans la carte de progression.</li>
             </ul>
           </div>
           <div class="aide-section">
@@ -307,17 +329,22 @@
 <script src="js/ui.js" defer></script>
 <script src="js/notifications.js" defer></script>
 <script src="js/geocode.js" defer></script>
+<script src="js/types.js" defer></script>
 <script src="js/data.js" defer></script>
 <script src="js/statuts.js" defer></script>
 <script src="js/etiquettes.js" defer></script>
 <script src="js/map.js" defer></script>
+<script src="js/telechargements.js" defer></script>
 <script src="js/coquille.js" defer></script>
 <script src="js/carte-ui.js" defer></script>
+<script src="js/telechargements-ui.js" defer></script>
 <script src="js/etiquettes-ui.js" defer></script>
 <script src="js/panneau.js" defer></script>
 <script src="js/position.js" defer></script>
 <script src="js/secteurs.js" defer></script>
 <script src="js/secteurs-ui.js" defer></script>
+<script src="js/communes.js" defer></script>
+<script src="js/communes-ui.js" defer></script>
 <script src="js/rappels-ui.js" defer></script>
 <script src="js/stats.js" defer></script>
 <script src="js/stats-ui.js" defer></script>

@@ -22,7 +22,8 @@ var Palette = (function () {
       { ic: 'table', t: 'Base des maisons', s: 'Tableau, filtres, colonnes', mots: 'base données tableau liste adresses maisons', fn: function () { Coquille.naviguer('base'); } },
       { ic: 'square-dashed', t: 'Sélection multiple', s: 'S', mots: 'sélection multiple lasso rectangle', fn: function () { Coquille.naviguer('carte'); Outils.setMode('selection'); } },
       { ic: 'map-pin-plus', t: 'Ajouter une maison', s: 'A', mots: 'ajouter maison point', fn: function () { Coquille.naviguer('carte'); Outils.setMode('ajouter'); } },
-      { ic: 'download', t: 'Charger les maisons de cette zone', mots: 'charger maisons bâtiments overpass', fn: function () { Coquille.naviguer('carte'); CarteUi.charger(); } },
+      { ic: 'download', t: 'Charger les maisons de cette zone', mots: 'charger maisons bâtiments télécharger', fn: function () { Coquille.naviguer('carte'); CarteUi.charger(); } },
+      { ic: 'cloud-download', t: 'Télécharger une commune entière', s: 'Tous ses bâtiments et adresses', mots: 'commune ville télécharger entière', fn: function () { Coquille.ouvrirTiroir('secteurs'); setTimeout(function () { document.getElementById('commune-recherche').focus(); }, 300); } },
       { ic: 'locate', t: 'Ma position', mots: 'position gps localiser', fn: function () { document.getElementById('btn-position').click(); } },
       { ic: 'file-json', t: 'Exporter une sauvegarde (JSON)', mots: 'exporter sauvegarde json backup', fn: function () { Echange.exporterJson(); } },
       { ic: 'file-spreadsheet', t: 'Exporter en tableur (CSV)', mots: 'exporter csv excel tableur', fn: function () { Echange.exporterCsv(); } },
@@ -41,8 +42,8 @@ var Palette = (function () {
     if (q.length < 2) return [];
     var recs = Statuts._records(), res = [];
     Object.keys(recs).some(function (id) {
-      var r = recs[id], f = DataImmo.batiment(id);
-      var adr = (f && DataImmo.adresse(f.properties)) || Statuts.adresseDe(id);
+      var r = recs[id], b = Statuts.parent(id), f = DataImmo.batiment(b);
+      var adr = [(f && DataImmo.adresse(f.properties)) || Statuts.adresseDe(b), Statuts.estLot(id) ? r.libelle : ''].filter(Boolean).join(' · ');
       var extra = [Statuts.libelleQualif('projet', r.projet), r.potentiel ? 'potentiel ' + Statuts.libelleQualif('potentiel', r.potentiel) : ''].concat((r.etiquettes || []).map(Etiquettes.nom)).join(' ');
       if (correspond(q, (r.nom || '') + ' ' + adr + ' ' + (r.note || '') + ' ' + extra)) {
         res.push({ ic: Statuts.parId(r.statut).icone, t: r.nom || adr || 'Maison', s: [r.nom ? adr : '', Statuts.parId(r.statut).label].filter(Boolean).join(' · '),
@@ -104,12 +105,20 @@ var Palette = (function () {
     var mon = ++numRequete;
     timer = setTimeout(function () {
       zone.setAttribute('aria-busy', 'true');
+      var communes = Communes.rechercher(brut).catch(function () { return []; });
       Geocode.chercher(brut, 5).then(function (rs) {
+        return communes.then(function (cs) { return [rs, cs]; });
+      }).then(function (x) {
+        var rs = x[0], cs = x[1];
         if (mon !== numRequete || !dlg.open) return;
         var adr = rs.map(function (r) {
           return { ic: 'map-pin', t: r.label, s: r.detail, fn: function () { Coquille.naviguer('carte'); CarteImmo.aller(r); document.getElementById('accueil-carte').hidden = true; } };
         });
-        rendre([{ titre: 'Adresses', items: adr }].concat(base));
+        var com = cs.slice(0, 3).map(function (c) {
+          var deja = Communes.parCode(c.code);
+          return { ic: 'cloud-download', t: (deja ? 'Mettre à jour ' : 'Télécharger toute la commune : ') + c.nom, s: [c.cp, c.population ? Ui.nombre(c.population) + ' hab.' : '', c.departement].filter(Boolean).join(' · '), fn: function () { CommunesUi.telecharger(c); } };
+        });
+        rendre([{ titre: 'Adresses', items: adr }, { titre: 'Communes', items: com }].concat(base));
       }).catch(function () {
         if (mon === numRequete && dlg.open) Notif.afficher('Recherche d\'adresse impossible : vérifiez votre connexion.', { type: 'erreur', cle: 'geocode' });
       }).finally(function () { zone.removeAttribute('aria-busy'); });

@@ -22,6 +22,55 @@ function grille(nl, nc, base, rues, dLon) {
   return els;
 }
 
+// ---------- Simulation du service WFS de l'IGN (BD TOPO, BAN-PLUS) à partir d'une grille ----------
+// Étiquettes OSM de la grille -> champs BD TOPO : house = maison (1 logement), apartments = immeuble
+// (building:flats logements), shed/garage = annexe, retail/commercial = commerce, yes = usage inconnu.
+function versIgn(els) {
+  const bat = [], adr = [], lien = [];
+  els.forEach(x => {
+    const t = x.tags || {}, b = t.building || 'yes';
+    const p = { cleabs: 'BATIMENT' + String(x.id).padStart(16, '0'), etat_de_l_objet: 'En service', construction_legere: b === 'shed',
+      usage_1: { house: 'Résidentiel', apartments: 'Résidentiel', shed: 'Annexe', garage: 'Annexe', retail: 'Commercial et services', commercial: 'Commercial et services' }[b] || 'Indifférencié',
+      usage_2: t['test:usage2'] || null,
+      nombre_de_logements: b === 'house' ? 1 : b === 'apartments' ? (+t['building:flats'] || 10) : 0, nombre_d_etages: b === 'apartments' ? 4 : 1 };
+    bat.push({ type: 'Feature', id: 'batiment.' + x.id, geometry: { type: 'MultiPolygon', coordinates: [[x.geometry.map(g => [g.lon, g.lat, 12])]] }, properties: p, c: x.geometry[0] });
+    if (t['addr:street']) {
+      const ia = '44999_' + x.id;
+      adr.push({ type: 'Feature', id: 'adresse.' + x.id, geometry: null, properties: { id_adr: ia, numero: +t['addr:housenumber'] || null, rep: null, nom_voie: t['addr:street'], insee_com: '44999' }, c: x.geometry[0] });
+      lien.push({ type: 'Feature', id: 'lien.' + x.id, geometry: null, properties: { id_adr: ia, id_bat: p.cleabs }, c: x.geometry[0] });
+    }
+  });
+  return { 'BDTOPO_V3:batiment': bat, 'BAN-PLUS:adresse': adr, 'BAN-PLUS:lien_adresse_bati': lien };
+}
+function dansPoly(lat, lon, poly) {
+  let d = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [yi, xi] = poly[i], [yj, xj] = poly[j];
+    if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) d = !d;
+  }
+  return d;
+}
+// Répond à une requête GetFeature (pagination COUNT / STARTINDEX, filtre BBOX ou CQL)
+function reponseWfs(url, couches) {
+  const u = new URL(url), q = k => u.searchParams.get(k);
+  let liste = couches[q('TYPENAMES')] || [];
+  const bbox = q('BBOX'), cql = q('CQL_FILTER');
+  if (bbox) { const [s, w, n, e] = bbox.split(',').map(Number); liste = liste.filter(f => f.c.lat >= s && f.c.lat <= n && f.c.lon >= w && f.c.lon <= e); }
+  else if (cql && /INTERSECTS/.test(cql)) {
+    const pts = cql.match(/POLYGON\(\((.*)\)\)/)[1].split(',').map(x => x.trim().split(/\s+/).map(Number)).map(([lon, lat]) => [lat, lon]);
+    liste = liste.filter(f => dansPoly(f.c.lat, f.c.lon, pts));
+  } else if (cql && /insee_com/.test(cql)) liste = liste.filter(f => f.properties.insee_com === cql.match(/'(\w+)'/)[1]);
+  const debut = +q('STARTINDEX') || 0, nb = +q('COUNT') || 5000;
+  const page = liste.slice(debut, debut + nb).map(({ c, ...f }) => f);
+  return { type: 'FeatureCollection', features: page, numberMatched: liste.length, numberReturned: page.length };
+}
+// Commune simulée : « Testville » (44999), un rectangle autour de la grille de test
+const COMMUNE = { nom: 'Testville', code: '44999', codesPostaux: ['44999'], population: 1234, departement: { nom: 'Loire-Atlantique', code: '44' } };
+function contourCommune() {
+  const s = lat0 - 0.0005, w = lon0 - 0.0005, n = lat0 + 0.004, e = lon0 + 0.004;
+  return { type: 'Polygon', coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] };
+}
+
 async function demarrer(port) {
   const srv = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: RACINE, stdio: 'ignore' });
   await new Promise(r => setTimeout(r, 900));
@@ -40,7 +89,7 @@ async function page(env, opts = {}) {
   p.erreurs = [];
   p.on('pageerror', e => p.erreurs.push(String(e)));
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_INTERNET_DISCONNECTED/.test(m.text())) p.erreurs.push('console: ' + m.text()); });
-  p.appels = { overpass: 0, reverse: 0, search: 0, tuiles: 0 };
+  p.appels = { overpass: 0, reverse: 0, search: 0, tuiles: 0, wfs: 0, communes: 0 };
   await p.route('https://tile.openstreetmap.org/**', r => { p.appels.tuiles++; r.fulfill({ body: png, contentType: 'image/png' }); });
   await p.route('https://data.geopf.fr/wmts**', r => r.fulfill({ body: png, contentType: 'image/png' }));
   await p.route('https://data.geopf.fr/geocodage/search**', r => { p.appels.search++; r.fulfill({ json: { features: [
@@ -53,6 +102,16 @@ async function page(env, opts = {}) {
     const [s, w, n, e] = m ? m.slice(1).map(Number) : [-90, -180, 90, 180];
     r.fulfill({ json: { elements: els.filter(x => { const g = x.geometry[0]; return g.lat >= s && g.lat <= n && g.lon >= w && g.lon <= e; }) } });
   };
+  const couches = versIgn(els);
+  p.couchesIgn = couches;
+  const repondreWfs = (r) => r.fulfill({ json: reponseWfs(r.request().url(), couches) });
+  await p.route('https://data.geopf.fr/wfs/**', r => { p.appels.wfs++; if (opts.wfs) return opts.wfs(r, p.appels.wfs, repondreWfs); repondreWfs(r); });
+  await p.route('https://geo.api.gouv.fr/**', r => {
+    p.appels.communes++;
+    const u = r.request().url();
+    if (/\/communes\/\d+/.test(u)) return r.fulfill({ json: Object.assign({}, COMMUNE, { contour: contourCommune() }) });
+    r.fulfill({ json: [COMMUNE, { nom: 'Testville-sur-Mer', code: '44998', codesPostaux: ['44998'], population: 80, departement: { nom: 'Loire-Atlantique' } }] });
+  });
   await p.route('https://overpass-api.de/**', r => { p.appels.overpass++; if (opts.overpass) return opts.overpass(r, p.appels.overpass, repondre); repondre(r); });
   await p.route('https://overpass.kumi.systems/**', r => { p.appels.overpass++; if (opts.overpassMiroir) return opts.overpassMiroir(r); repondre(r); });
   await p.goto(env.url);
@@ -76,7 +135,7 @@ async function chargerZone(p, lat, lon, z) {
   await vue(p, lat || lat0 + 0.00025, lon || lon0 + 0.0004, z || 19);
   await p.waitForSelector('#pastille-charger.action');
   await p.click('#pastille-charger');
-  await p.waitForFunction(() => CarteImmo.total() > 0 && !DataImmo.enCours());
+  await p.waitForFunction(() => CarteImmo.total() > 0 && !Telechargements.enCours());
 }
 // Ouvre un panneau du tiroir et attend qu'il soit réellement affiché
 async function tiroir(p, nom) {

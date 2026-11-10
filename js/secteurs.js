@@ -1,16 +1,13 @@
 /*
  * secteurs.js – Secteurs de prospection : polygones dessinés et nommés, statistiques de
- * couverture, mise en évidence des maisons restant à faire, chargement des bâtiments
- * d'un secteur (par morceaux, pour respecter les limites d'Overpass).
+ * couverture (en logements : un immeuble de 30 logements compte pour 30 portes), mise en évidence des
+ * bâtiments restant à faire, téléchargement des bâtiments d'un secteur (gestionnaire de téléchargement).
  * Expose l'objet global Secteurs.
  */
 var Secteurs = (function () {
   'use strict';
 
   var PALETTE = ['#d81b60', '#00897b', '#5e35b1', '#f4511e', '#039be5', '#7cb342', '#8d6e63', '#546e7a'];
-  var TAILLE_CELLULE_KM = 1.2;   // un secteur est chargé par cases de ~1,2 km de côté
-  var CELLULES_MAX = 12;         // au-delà, le secteur est refusé (trop grand pour Overpass)
-  var PAUSE_ENTRE_CELLULES_MS = 1000;
 
   var map, alerter = function () {};
   var liste = [];                 // { id, nom, points: [[lat, lon], …], couleur }
@@ -22,8 +19,7 @@ var Secteurs = (function () {
   var dessin = null;              // { points, couche } pendant le tracé
   var trouActif = null;           // id du secteur dont on met les maisons à faire en évidence
   var dernierSuivant = null;
-  var chargement = null;          // { id, fait, total } pendant un chargement
-  var timerMaj = null;
+  var timerMaj = null, timerSignal = null;
 
   function surMaj(cb) { ecouteurs.push(cb); }
   function surStructure(cb) { ecouteursStructure.push(cb); } // création, nom, suppression, option : à sauvegarder
@@ -83,16 +79,18 @@ var Secteurs = (function () {
     });
   }
 
+  // Avancement en logements (portes) : { total, faits, aFaire, pct, parStatut, batiments, batimentsAFaire }
   function stats(id) {
-    var m = membres[id] || [], par = {};
-    Statuts.LISTE.forEach(function (st) { par[st.id] = 0; });
-    m.forEach(function (b) { par[Statuts.statutDe(b)]++; });
-    var total = m.length, faits = total - par.aucun;
-    return { total: total, faits: faits, aFaire: par.aucun, pct: total ? Math.round(100 * faits / total) : null, parStatut: par };
+    var m = membres[id] || [], c = Statuts.compterLogements(m), par = {};
+    Statuts.LISTE.forEach(function (st) { par[st.id] = c[st.id]; });
+    var total = c.total, faits = total - par.aucun;
+    return { total: total, faits: faits, aFaire: par.aucun, pct: total ? Math.round(100 * faits / total) : null, parStatut: par,
+      batiments: m.length, batimentsAFaire: nonFaits(id).length };
   }
 
+  // Bâtiments dont au moins un logement reste à faire
   function nonFaits(id) {
-    return (membres[id] || []).filter(function (b) { return Statuts.statutDe(b) === 'aucun'; });
+    return (membres[id] || []).filter(function (b) { var a = Statuts.avancement(b); return a.faits < a.total; });
   }
 
   // ---------- Affichage sur la carte ----------
@@ -148,9 +146,9 @@ var Secteurs = (function () {
 
   // ---------- Création / modification ----------
 
-  function creer(points) {
+  function creer(points, nom) {
     var n = liste.length + 1, id = 's' + Date.now().toString(36);
-    var s = { id: id, nom: 'Secteur ' + n, points: points, couleur: PALETTE[liste.length % PALETTE.length] };
+    var s = { id: id, nom: (nom || '').slice(0, 80) || 'Secteur ' + n, points: points, couleur: PALETTE[liste.length % PALETTE.length] };
     liste.push(s);
     reconstruire(); structureChangee();
     return s;
@@ -206,50 +204,22 @@ var Secteurs = (function () {
     return meilleur;
   }
 
-  // ---------- Chargement des bâtiments d'un secteur ----------
+  // ---------- Téléchargement des bâtiments d'un secteur ----------
 
-  function cellules(points) {
-    var b = limites(points), latMoy = b.getCenter().lat * Math.PI / 180;
-    var largeurKm = (b.getEast() - b.getWest()) * 111.32 * Math.cos(latMoy);
-    var hauteurKm = (b.getNorth() - b.getSouth()) * 111.32;
-    var nx = Math.max(1, Math.ceil(largeurKm / TAILLE_CELLULE_KM)), ny = Math.max(1, Math.ceil(hauteurKm / TAILLE_CELLULE_KM));
-    if (nx * ny > CELLULES_MAX) return null;
-    var res = [], dLat = (b.getNorth() - b.getSouth()) / ny, dLon = (b.getEast() - b.getWest()) / nx;
-    for (var i = 0; i < ny; i++) for (var j = 0; j < nx; j++) {
-      res.push(L.latLngBounds([b.getSouth() + i * dLat, b.getWest() + j * dLon], [b.getSouth() + (i + 1) * dLat, b.getWest() + (j + 1) * dLon]));
-    }
-    return res;
-  }
-
-  function attendre(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
-
+  // Lance (ou relance) le téléchargement des bâtiments et adresses qui suivent le contour du secteur.
+  // Résout avec le résumé de la tâche (nouveaux bâtiments…) une fois terminé.
   function chargerBatiments(id) {
     var s = parId(id);
     if (!s) return Promise.reject(new Error('Secteur introuvable.'));
-    if (chargement) return Promise.reject(new Error('Un chargement est déjà en cours.'));
-    var cases = cellules(s.points);
-    if (!cases) return Promise.reject(new Error('Secteur trop grand pour être chargé d\'un coup : dessinez-le en plusieurs secteurs plus petits.'));
-    chargement = { id: id, fait: 0, total: cases.length };
+    var p = Telechargements.contour('secteur', s.nom, s.id, s.points);
     signaler();
-    var nouveaux = 0;
-    // Séquentiel et espacé : une seule requête Overpass à la fois
-    return cases.reduce(function (p, cellule, i) {
-      return p.then(function () {
-        return DataImmo.charger(cellule, DataImmo.config.zoomMin, function (n, max, delai) {
-          alerter('Serveur occupé, nouvel essai ' + n + '/' + max + ' dans ' + Math.round(delai / 1000) + ' s…');
-        }).then(function (res) {
-          CarteImmo.afficherBatiments(res.nouveaux);
-          if (!res.dejaCharge) { Store.enregistrerBatiments(res.nouveaux); Store.enregistrerZones(DataImmo.zones()); }
-          nouveaux += res.nouveaux.length;
-          chargement.fait = i + 1; signaler();
-          return (res.dejaCharge || i === cases.length - 1) ? null : attendre(PAUSE_ENTRE_CELLULES_MS);
-        });
-      });
-    }, Promise.resolve()).then(function () { return nouveaux; }).finally(function () {
-      chargement = null; reconstruire();
-    });
+    return p.finally(function () { reconstruire(); });
   }
-  function etatChargement() { return chargement; }
+  // Téléchargement en cours pour ce secteur : { id, pct } ou null
+  function etatChargement(id) {
+    var t = Telechargements.parRef('secteur', id);
+    return t && t.etat !== 'fini' ? { id: id, pct: Math.round(100 * Telechargements.progression(t).pct), etat: t.etat } : null;
+  }
 
   // ---------- Tracé d'un nouveau secteur (clic sur la carte pour chaque sommet) ----------
 
@@ -302,6 +272,7 @@ var Secteurs = (function () {
     // Les statuts changent souvent : simple recomptage. Les bâtiments changent plus rarement : recalcul complet.
     Statuts.surChangement(function () { planifierMaj(); });
     CarteImmo.surElements(function () { clearTimeout(timerMaj); timerMaj = setTimeout(reconstruire, 200); });
+    Telechargements.surChangement(function () { clearTimeout(timerSignal); timerSignal = setTimeout(signaler, 300); });
   }
 
   return {

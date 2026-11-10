@@ -1,7 +1,7 @@
 /*
  * tournees.js – Tournées de prospection : une session chronométrée (avec pauses) pendant laquelle
  * chaque maison pointée est enregistrée, ainsi que la distance parcourue (si « Ma position » est actif).
- * Tournée : { id, debut, fin, pauses: [[debut, fin]], secteur, objectif, passages: [{ id, statut, t }],
+ * Tournée : { id, debut, fin, pauses: [[debut, fin]], secteur, objectif, passages: [{ id, statut, t, n? }] (n = logements concernés, 1 par défaut),
  *             distance (m), trace: [[lat, lon]] } (dates en millisecondes).
  * Expose l'objet global Tournees.
  */
@@ -62,7 +62,7 @@ var Tournees = (function () {
       });
     } else {
       if (active.pauseDebut) reprendre();     // pointer une maison relance une tournée en pause
-      passages.forEach(function (p) { if (p.t >= active.debut) active.passages.push({ id: p.id, statut: p.statut, t: p.t }); });
+      passages.forEach(function (p) { if (p.t >= active.debut) active.passages.push(p.n > 1 ? { id: p.id, statut: p.statut, t: p.t, n: p.n } : { id: p.id, statut: p.statut, t: p.t }); });
     }
     signaler('passage');
   }
@@ -92,18 +92,21 @@ var Tournees = (function () {
   }
   var PORTE = ['prospectus', 'contact', 'absent', 'refus', 'rappeler'];
   function stats(t, maintenant) {
-    var dernier = {}, contacts = {}, par = {}, rues = {};
+    // Une porte = un logement : un immeuble pointé en une fois compte pour ses n logements
+    var dernier = {}, contacts = {}, par = {}, rues = {}, poids = {}, porte = {};
     t.passages.forEach(function (p) {
       dernier[p.id] = p.statut;
+      poids[p.id] = Math.max(poids[p.id] || 1, p.n || 1);
+      if (PORTE.indexOf(p.statut) >= 0) porte[p.id] = true;
       if (Statuts.CONTACTS.indexOf(p.statut) >= 0) contacts[p.id] = true;
     });
     var ids = Object.keys(dernier);
     ids.forEach(function (id) {
-      par[dernier[id]] = (par[dernier[id]] || 0) + 1;
-      var f = DataImmo.batiment(id), rue = f && f.properties['addr:street'];
+      par[dernier[id]] = (par[dernier[id]] || 0) + poids[id];
+      var f = DataImmo.batiment(Statuts.parent(id)), rue = f && f.properties['addr:street'];
       if (rue) rues[rue] = 1;
     });
-    var portes = ids.filter(function (id) { return t.passages.some(function (p) { return p.id === id && PORTE.indexOf(p.statut) >= 0; }); }).length;
+    var portes = ids.reduce(function (s, id) { return s + (porte[id] ? poids[id] : 0); }, 0);
     var duree = dureeMs(t, maintenant), heures = duree / 3600000;
     var nContacts = Object.keys(contacts).length;
     return {
@@ -118,6 +121,15 @@ var Tournees = (function () {
     };
   }
 
+  // Bâtiments OpenStreetMap remplacés par les bâtiments IGN : les passages suivent ({ ancien: nouveau })
+  function remplacerIds(corr) {
+    var touche = false;
+    liste.concat(active ? [active] : []).forEach(function (t) {
+      t.passages.forEach(function (p) { var b = Statuts.parent(p.id); if (corr[b]) { p.id = corr[b] + p.id.slice(b.length); touche = true; } });
+    });
+    if (touche) signaler('modification');
+  }
+
   // ---------- Persistance ----------
   function exporter() { return { liste: copie(liste), active: active ? copie(active) : null }; }
   function nettoyerUne(t) {
@@ -128,7 +140,7 @@ var Tournees = (function () {
       pauseDebut: t.pauseDebut && isFinite(t.pauseDebut) ? +t.pauseDebut : null,
       secteur: typeof t.secteur === 'string' ? t.secteur : null, objectif: Number.isInteger(t.objectif) ? t.objectif : null,
       passages: (Array.isArray(t.passages) ? t.passages : []).filter(function (p) { return p && typeof p.id === 'string' && typeof p.statut === 'string' && isFinite(p.t); })
-        .slice(0, 20000).map(function (p) { return { id: p.id, statut: p.statut, t: +p.t }; }),
+        .slice(0, 20000).map(function (p) { var o = { id: p.id, statut: p.statut, t: +p.t }; if (Number.isInteger(p.n) && p.n > 1 && p.n < 10000) o.n = p.n; return o; }),
       distance: isFinite(t.distance) ? +t.distance : 0,
       trace: (Array.isArray(t.trace) ? t.trace : []).filter(function (p) { return Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]); }).slice(0, TRACE_MAX)
     };
@@ -153,7 +165,7 @@ var Tournees = (function () {
 
   return {
     init: init, surChangement: surChangement, demarrer: demarrer, pause: pause, reprendre: reprendre, enPause: enPause,
-    terminer: terminer, abandonner: abandonner, supprimer: supprimer, renommer: renommer, parId: parId,
+    terminer: terminer, abandonner: abandonner, supprimer: supprimer, renommer: renommer, parId: parId, remplacerIds: remplacerIds,
     active: function () { return active; }, liste: function () { return liste; },
     stats: stats, dureeMs: dureeMs, derniereActivite: derniereActivite,
     exporter: exporter, nettoyer: nettoyer, charger: charger

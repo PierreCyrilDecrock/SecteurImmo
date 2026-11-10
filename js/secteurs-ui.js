@@ -31,9 +31,9 @@ var SecteursUi = (function () {
       var nom = Ui.bouton(s.nom, 'cs-nom', function () { Secteurs.voir(s.id); voirSurCarte(); }, { title: 'Voir ce secteur sur la carte' });
       tx.appendChild(nom);
     }
-    var ch = Secteurs.etatChargement(), enCharge = ch && ch.id === s.id;
-    tx.appendChild(el('div', 'sous-titre', enCharge ? 'Chargement des maisons : zone ' + Math.min(ch.fait + 1, ch.total) + ' sur ' + ch.total + '…'
-      : st.total ? Ui.nombre(st.total) + ' maisons · ' + Ui.nombre(st.faits) + ' faites · ' + Ui.nombre(st.aFaire) + ' à faire' : 'Aucune maison chargée'));
+    var ch = Secteurs.etatChargement(s.id), enCharge = !!ch;
+    tx.appendChild(el('div', 'sous-titre', enCharge ? (ch.etat === 'erreur' ? 'Téléchargement interrompu (voir en bas de la carte)' : ch.etat === 'pause' ? 'Téléchargement en pause : ' + ch.pct + ' %' : 'Téléchargement : ' + ch.pct + ' %')
+      : st.total ? Ui.nombre(st.total) + ' logement' + (st.total > 1 ? 's' : '') + ' · ' + Ui.nombre(st.faits) + ' faits · ' + Ui.nombre(st.aFaire) + ' à faire' : 'Aucun bâtiment chargé'));
     tete.appendChild(tx);
     tete.appendChild(Ui.bouton(icone('pencil', 'ic-sm'), 'btn btn-sm btn-icone btn-fantome', function () { idRenommer = s.id; dessiner(); }, { 'aria-label': 'Renommer', 'data-tip': 'Renommer', 'data-action': 'renommer' }));
     tete.appendChild(Ui.bouton(icone('trash-2', 'ic-sm'), 'btn btn-sm btn-icone btn-fantome', function () {
@@ -43,7 +43,7 @@ var SecteursUi = (function () {
     c.appendChild(tete);
 
     // Répartition par statut
-    var j = el('div', 'jauge multi'); j.setAttribute('role', 'img'); j.setAttribute('aria-label', st.faits + ' maisons faites sur ' + st.total);
+    var j = el('div', 'jauge multi'); j.setAttribute('role', 'img'); j.setAttribute('aria-label', st.faits + ' logements faits sur ' + st.total);
     if (st.total) Statuts.ORDRE_GRAPHIQUE.forEach(function (sid) {
       var n = st.parStatut[sid]; if (!n) return;
       var seg = el('span'); seg.style.flexBasis = (100 * n / st.total) + '%'; seg.style.background = 'var(--st-' + sid + ')'; seg.title = Statuts.parId(sid).label + ' : ' + n;
@@ -56,15 +56,17 @@ var SecteursUi = (function () {
       { 'aria-pressed': Secteurs.trousActifs() === s.id ? 'true' : 'false', 'data-action': 'trous', 'data-tip': 'Mettre en évidence les maisons à faire' });
     var bSuiv = Ui.bouton([icone('skip-forward', 'ic-sm'), 'Suivante'], 'btn btn-sm', function () {
       var id = Secteurs.suivant(s.id);
-      if (!id) { Notif.afficher(st.total ? 'Toutes les maisons de ce secteur sont faites, bravo !' : 'Chargez d\'abord les maisons du secteur.', { type: st.total ? 'succes' : 'info' }); return; }
+      if (!id) { Notif.afficher(st.total ? 'Tous les logements de ce secteur sont faits, bravo !' : 'Téléchargez d\'abord les bâtiments du secteur.', { type: st.total ? 'succes' : 'info' }); return; }
       Coquille.fermerTiroir(); Panneau.ouvrir(id);
     }, { 'data-action': 'suivant', 'data-tip': 'Aller à la maison à faire la plus proche' });
-    var bCharger = Ui.bouton([icone(enCharge ? 'loader-circle' : 'download', 'ic-sm' + (enCharge ? ' rotation' : '')), st.total ? 'Compléter' : 'Charger les maisons'], 'btn btn-sm' + (st.total ? '' : ' btn-primaire'), function () {
-      Secteurs.chargerBatiments(s.id).then(function (n) {
-        Notif.afficher(n ? n + ' maison' + (n > 1 ? 's' : '') + ' ajoutée' + (n > 1 ? 's' : '') + ' dans « ' + s.nom + ' »' : 'Secteur déjà complet.', { type: 'succes' });
-      }).catch(function (e) { Notif.afficher(e.message || 'Chargement impossible.', { type: 'erreur' }); });
+    var bCharger = Ui.bouton([icone(enCharge ? 'loader-circle' : 'download', 'ic-sm' + (enCharge && ch.etat === 'en-cours' ? ' rotation' : '')), st.total ? 'Compléter' : 'Télécharger les bâtiments'], 'btn btn-sm' + (st.total ? '' : ' btn-primaire'), function () {
+      Secteurs.chargerBatiments(s.id).then(function (r) {
+        var n = r.nouveaux;
+        Notif.afficher(n ? Ui.nombre(n) + ' bâtiment' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '') + ' dans « ' + s.nom + ' »' : 'Secteur déjà complet.', { type: 'succes' });
+        if (r.avertissement) Notif.afficher(r.avertissement, { type: 'alerte', duree: 9000 });
+      }).catch(function (e) { if (!/annulé/.test(e.message)) Notif.afficher(e.message || 'Téléchargement impossible.', { type: 'erreur' }); });
     }, { 'data-action': 'charger' });
-    bCharger.disabled = !!ch;
+    bCharger.disabled = enCharge && ch.etat !== 'erreur';
     a.appendChild(bTrous); a.appendChild(bSuiv); a.appendChild(bCharger);
     c.appendChild(a);
     return c;
@@ -87,13 +89,13 @@ var SecteursUi = (function () {
     caseCouleur.checked = !!Secteurs.options().colorer;
   }
 
-  function ouvrir() { visible = true; animer = true; dessiner(); animer = false; }
+  function ouvrir() { visible = true; animer = true; dessiner(); animer = false; CommunesUi.ouvrir(); }
   function ouvrirPourRenommer(id) { idRenommer = id; Coquille.ouvrirTiroir('secteurs'); }
 
   function init() {
     liste = document.getElementById('secteurs-liste');
     caseCouleur = document.getElementById('secteurs-couleur');
-    Coquille.enregistrer('secteurs', { ouvrir: ouvrir, fermer: function () { visible = false; } });
+    Coquille.enregistrer('secteurs', { ouvrir: ouvrir, fermer: function () { visible = false; CommunesUi.fermer(); } });
     document.getElementById('secteurs-nouveau').addEventListener('click', function () {
       Coquille.fermerTiroir(); Secteurs.demarrerDessin();
     });

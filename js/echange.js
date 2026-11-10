@@ -16,16 +16,18 @@ var Echange = (function () {
   function construireExport() {
     var recs = Statuts._records(), man = Statuts.manuels(), adr = Statuts.adressesToutes();
     var batiments = [], adresses = {};
+    var vus = {};
     Object.keys(recs).forEach(function (id) {
-      var f = DataImmo.batiment(id);
-      if (f) batiments.push(f);
+      var b = Statuts.parent(id), f = DataImmo.batiment(b);
+      if (f && !vus[b]) { vus[b] = 1; batiments.push(f); }
       if (adr[id]) adresses[id] = adr[id];
     });
     Object.keys(man).forEach(function (id) { if (adr[id]) adresses[id] = adr[id]; });
     return {
       app: 'SecteurImmo', schema: Store.SCHEMA, exporteLe: new Date().toISOString(),
       records: recs, manuels: man, adresses: adresses, batiments: batiments,
-      secteurs: Secteurs.exporter(), etiquettes: Etiquettes.exporter(), tournees: { liste: Tournees.exporter().liste }
+      secteurs: Secteurs.exporter(), etiquettes: Etiquettes.exporter(), tournees: { liste: Tournees.exporter().liste },
+      communes: Communes.exporter(), types: TypesBati.exporter()
     };
   }
 
@@ -35,11 +37,20 @@ var Echange = (function () {
     var valides = {}; Statuts.LISTE.forEach(function (s) { valides[s.id] = true; });
     Object.keys(d.records || {}).forEach(function (id) {
       var r = d.records[id];
-      if (typeof id !== 'string' || !r || typeof r !== 'object' || !valides[r.statut || 'aucun']) { propre.ignores++; return; }
+      if (typeof id !== 'string' || id.length > 80 || !r || typeof r !== 'object' || !valides[r.statut || 'aucun']) { propre.ignores++; return; }
       var o = { statut: r.statut || 'aucun' };
       if (typeof r.date === 'string' && r.date.length <= 32) o.date = r.date;
       if (typeof r.note === 'string' && r.note) o.note = r.note.slice(0, 2000);
       if (Number.isInteger(r.logements) && r.logements > 0 && r.logements < 10000) o.logements = r.logements;
+      // Schéma 6 : type corrigé, logements détaillés d'un immeuble, accès
+      if (typeof r.type === 'string' && TypesBati.LISTE.some(function (t) { return t.id === r.type; })) o.type = r.type;
+      if (Array.isArray(r.lots)) { var lots = r.lots.filter(function (k) { return typeof k === 'string' && /^[a-z0-9]{1,20}$/i.test(k); }).slice(0, 2000); if (lots.length) o.lots = lots; }
+      if (typeof r.libelle === 'string' && r.libelle.trim()) o.libelle = r.libelle.trim().slice(0, 60);
+      if (typeof r.digicode === 'string' && r.digicode.trim()) o.digicode = r.digicode.trim().slice(0, 40);
+      if (typeof r.syndic === 'string' && r.syndic.trim()) o.syndic = r.syndic.trim().slice(0, 120);
+      if (r.interphone === true) o.interphone = true;
+      if (r.gardien === true) o.gardien = true;
+      if (r.boites === 'acces' || r.boites === 'ferme') o.boites = r.boites;
       if (typeof r.nom === 'string' && r.nom.trim()) o.nom = r.nom.trim().slice(0, 120);
       if (typeof r.tel === 'string' && /^[0-9+().\s-]{3,40}$/.test(r.tel.trim())) o.tel = r.tel.trim();
       if (Array.isArray(r.etiquettes)) {
@@ -51,7 +62,7 @@ var Echange = (function () {
       });
       if (Array.isArray(r.historique)) {
         var h = r.historique.filter(function (x) { return x && valides[x.statut] && typeof x.date === 'string' && x.date.length <= 32; })
-          .slice(-30).map(function (x) { return { statut: x.statut, date: x.date }; });
+          .slice(-30).map(function (x) { var e = { statut: x.statut, date: x.date }; if (Number.isInteger(x.n) && x.n > 1 && x.n < 10000) e.n = x.n; return e; });
         if (h.length) o.historique = h;
       }
       propre.records[id] = o;
@@ -64,9 +75,15 @@ var Echange = (function () {
     Object.keys(d.adresses || {}).forEach(function (id) { if (typeof d.adresses[id] === 'string') propre.adresses[id] = d.adresses[id].slice(0, 300); });
     (d.batiments || []).forEach(function (f) {
       if (f && typeof f.id === 'string' && f.geometry && /^(Multi)?Polygon$/.test(f.geometry.type) && Array.isArray(f.geometry.coordinates)) {
-        propre.batiments.push({ type: 'Feature', id: f.id, properties: f.properties && typeof f.properties === 'object' ? f.properties : {}, geometry: f.geometry });
+        var pr = f.properties && typeof f.properties === 'object' ? Object.assign({}, f.properties) : {};
+        delete pr._t;   // type recalculé à partir des données
+        propre.batiments.push({ type: 'Feature', id: f.id, properties: pr, geometry: f.geometry });
       } else propre.ignores++;
     });
+    propre.communes = (Array.isArray(d.communes) ? d.communes : []).filter(function (c) {
+      return c && typeof c.code === 'string' && /^[0-9AB]{5}$/.test(c.code) && typeof c.nom === 'string' && Array.isArray(c.contour) && c.contour.length >= 4 && c.contour.length <= 3000 &&
+        c.contour.every(function (p) { return Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180; });
+    }).map(function (c) { return { code: c.code, nom: c.nom.slice(0, 80), cp: typeof c.cp === 'string' ? c.cp.slice(0, 10) : '', population: +c.population || 0, contour: c.contour.map(function (p) { return [+p[0], +p[1]]; }), ajoute: +c.ajoute || Date.now(), maj: +c.maj || undefined }; });
     propre.etiquettes = Etiquettes.nettoyer(d.etiquettes);
     propre.tournees = Tournees.nettoyer(d.tournees);
     var sec = Secteurs.nettoyer(d.secteurs);
@@ -98,20 +115,20 @@ var Echange = (function () {
     return /[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
 
-  // ids : sélection facultative (sinon tous les bâtiments ayant un statut)
+  // ids : sélection facultative (sinon toutes les fiches : bâtiments et logements détaillés)
   function construireCsv(ids) {
     var recs = Statuts._records(), adr = Statuts.adressesToutes();
-    var lignes = [['id', 'adresse', 'nom', 'telephone', 'statut', 'date', 'potentiel', 'projet', 'echeance', 'occupant', 'etiquettes', 'note', 'logements', 'latitude', 'longitude']];
+    var lignes = [['id', 'adresse', 'logement', 'type', 'nom', 'telephone', 'statut', 'date', 'potentiel', 'projet', 'echeance', 'occupant', 'etiquettes', 'note', 'logements', 'latitude', 'longitude']];
     (ids || Object.keys(recs)).slice().sort().forEach(function (id) {
       if (!recs[id]) return;
-      var r = recs[id], c = CarteImmo.centre(id), f = DataImmo.batiment(id);
-      var a = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
+      var r = recs[id], b = Statuts.parent(id), c = CarteImmo.centre(id), f = DataImmo.batiment(b), lot = Statuts.estLot(id);
+      var a = (f && DataImmo.adresse(f.properties)) || adr[b] || '';
       var q = function (champ) { return Statuts.libelleQualif(champ, r[champ]); };
-      lignes.push([id, a, r.nom || '', r.tel || '', Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '),
-        q('potentiel'), q('projet'), q('echeance'), q('occupant'), (r.etiquettes || []).map(Etiquettes.nom).filter(Boolean).join(', '), r.note || '', r.logements || '',
+      lignes.push([id, a, lot ? r.libelle || '' : '', TypesBati.parId(TypesBati.typeDe(b)).court, r.nom || '', r.tel || '', Statuts.parId(r.statut).label, (r.date || '').replace('T', ' '),
+        q('potentiel'), q('projet'), q('echeance'), q('occupant'), (r.etiquettes || []).map(Etiquettes.nom).filter(Boolean).join(', '), r.note || '', lot ? '' : Statuts.avancement(b).total,
         c ? c[0].toFixed(6) : '', c ? c[1].toFixed(6) : '']);
     });
-    return '﻿' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 12 && i <= 14); }).join(';'); }).join('\r\n') + '\r\n';
+    return '\ufeff' + lignes.map(function (l) { return l.map(function (v, i) { return celluleCsv(v, i >= 14 && i <= 16); }).join(';'); }).join('\r\n') + '\r\n';
   }
 
   function exporterCsv(ids) {
@@ -187,6 +204,7 @@ var Echange = (function () {
     var bilan = Statuts.charger(propre, mode, mode === 'remplacer');
     Secteurs.charger(propre.secteurs, mode);
     if (propre.tournees.liste.length) Tournees.charger({ liste: propre.tournees.liste, active: mode === 'remplacer' ? null : Tournees.active() }, mode === 'remplacer' ? 'remplacer' : 'fusionner');
+    if (propre.communes.length) { Communes.charger(mode === 'remplacer' ? propre.communes : Communes.liste().concat(propre.communes.filter(function (c) { return !Communes.parCode(c.code); }))); Store.kvSet('communes', Communes.exporter()); }
     if (propre.etiquettes.length || mode === 'remplacer') Etiquettes.charger(propre.etiquettes, mode === 'remplacer' && propre.etiquettes.length ? 'remplacer' : 'fusionner');
     CarteImmo.afficherBatiments(propre.batiments);
     CarteImmo.synchroniserManuels(Statuts.manuels());

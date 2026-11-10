@@ -30,7 +30,7 @@ Le script démarre `python -m http.server` sur `http://localhost:8000` et ouvre 
 
 Au premier lancement, une courte présentation explique l'essentiel. Ensuite :
 1. **Recherchez** votre ville ou votre rue (barre en haut, ou `Ctrl K`).
-2. Zoomez sur les rues puis touchez **« Charger les maisons de cette zone »** (en bas de la carte).
+2. **Téléchargez votre commune** (*Secteurs → Communes*, ou son nom dans la recherche) : tous ses bâtiments et adresses arrivent en une fois. Ou zoomez sur une rue et touchez **« Charger les maisons de cette zone »**.
 3. **Secteurs** : dessinez votre zone pour suivre le pourcentage couvert.
 4. Sur le terrain, **démarrez une tournée** (bouton ▶ du dock) : le chrono tourne, le pointage rapide s'active, touchez chaque maison faite.
 5. À la fin, le **bilan de tournée** affiche vos chiffres, vos records battus et l'expérience gagnée. Suivez vos progrès dans **Tournées**, vos résultats dans **Bilan**, vos adresses dans **Base**, vos personnes à recontacter dans **Rappels**.
@@ -46,11 +46,46 @@ Au premier lancement, une courte présentation explique l'essentiel. Ensuite :
 
 ## Prospecter sur la carte
 
-### Charger les maisons
+### Télécharger les bâtiments
 
-La pastille en bas de la carte guide : *« Zoomez pour afficher les maisons »* (un clic zoome), puis *« Charger les maisons de cette zone »*, puis *« 12 maisons ajoutées »*. Les bâtiments viennent d'OpenStreetMap (API Overpass) :
-- requêtes bornées (zoom ≥ 16, zone ≤ 6 km², une seule à la fois) ; une zone déjà chargée n'est jamais retéléchargée (mémorisée 30 jours) ;
-- en cas d'erreur 429 / 502 / 503 / 504 ou réseau : jusqu'à 4 essais espacés, en alternant avec le serveur miroir `overpass.kumi.systems` ; une fine barre de progression en haut de la carte indique les téléchargements.
+Les bâtiments et leurs adresses viennent de l'**IGN** (Géoplateforme, données ouvertes) :
+- **BD TOPO** : le contour de chaque bâtiment, son **usage** (résidentiel, commercial, industriel, annexe…), son **nombre de logements** et d'étages ;
+- **BAN-PLUS** : les adresses officielles, rattachées à chaque bâtiment (un immeuble peut en avoir plusieurs).
+
+Trois façons de télécharger :
+- **Une commune entière** : *Secteurs → Communes*, tapez le nom ou le code postal (ou cherchez la commune avec `Ctrl K` → « Télécharger toute la commune »). Le contour officiel de la commune (API géographique de l'État, `geo.api.gouv.fr`) s'affiche sur la carte. Ordre de grandeur : une commune de 4 000 habitants (environ 4 200 bâtiments) en une vingtaine de secondes.
+- **Un secteur** : *Télécharger les bâtiments* dans sa carte (aucune limite de taille : les bâtiments sont filtrés selon son contour).
+- **La zone à l'écran** : la pastille en bas de la carte (*« Charger les maisons de cette zone »*, à partir d'un zoom de rue, jusqu'à 25 km²).
+
+Pendant un téléchargement, une **carte de progression** (en bas de la carte) indique l'étape (bâtiments, adresses, rattachement des adresses), le nombre reçu, le pourcentage et le temps restant estimé. Les bâtiments apparaissent au fur et à mesure.
+
+**Robustesse** :
+- une seule requête à la fois, par pages de 5 000 objets, avec une courte pause entre deux ;
+- en cas d'erreur (429, 502, 503, 504, réseau, délai dépassé) : jusqu'à 5 nouveaux essais espacés (2 s, 4 s, 8 s…), en respectant le délai demandé par le serveur, avec des pages plus petites si le serveur peine ; le message de la carte de progression dit ce qui se passe ;
+- **Pause / Reprendre / Annuler** ; la progression est enregistrée après chaque page : après une coupure réseau (attente automatique du retour du réseau), un rechargement ou la fermeture du navigateur, le téléchargement **reprend là où il s'était arrêté** ;
+- en cas d'échec : message clair et bouton **Réessayer** ; si seules les adresses manquent, les bâtiments sont gardés (l'adresse est alors cherchée à l'ouverture de la fiche) ;
+- **secours** : pour une zone à l'écran, si l'IGN ne répond pas, les bâtiments sont pris dans OpenStreetMap (Overpass, 6 km² au plus) ; quand l'IGN revient, ils sont remplacés par les bâtiments IGN et leurs fiches (statuts, contacts, notes) y sont rattachées automatiquement. Les fiches créées avec les anciennes versions de l'application (bâtiments OpenStreetMap) sont rattachées de la même façon au premier téléchargement IGN de la zone.
+
+Une zone déjà téléchargée n'est pas proposée de nouveau pendant 30 jours (*Mettre à jour* une commune ajoute les nouveaux bâtiments). Les tuiles de fond de carte ne sont jamais téléchargées en masse.
+
+### Types de bâtiments
+
+Chaque bâtiment reçoit un type, déduit de l'IGN : **maison**, **immeuble** (2 logements ou plus), **habitation avec commerce**, **entreprise / commerce**, **industriel / agricole**, **équipement** (école, culte, sport), **usage inconnu**, **annexe** (garage, abri, dépendance, construction légère).
+- Par défaut, seuls les **maisons, immeubles et habitations avec commerce** sont affichés et comptés ; les autres types se cochent dans la **légende** (*Bâtiments affichés*, avec le nombre de chaque type). Un bâtiment qui a une fiche (statut, note…) reste toujours affiché.
+- Sur la carte, un immeuble non fait est plus foncé, et ce qui n'est pas de l'habitation a un contour pointillé.
+- Dans la fiche (*Bâtiment*), corrigez le **type** ou le **nombre de logements** si les données se trompent.
+
+### Immeubles et logements
+
+**Un logement = une porte** : un immeuble de 30 logements compte pour 30 portes dans l'avancement, la légende, les secteurs, le bilan, les tournées, les records et les défis.
+- **Un geste pour tout l'immeuble** : dans la fiche (ou en pointage rapide), un statut s'applique à tous les logements non détaillés (ex. prospectus dans toutes les boîtes : 30 portes).
+- **Logements détaillés** : *Ajouter un logement* (« Apt 12 », « 2e gauche »…) ; chacun a sa propre fiche (statut, contact, qualification, note, historique, étiquettes) et reprend au départ le statut de l'immeuble. Il apparaît dans les **Rappels**, la **Base** (colonne *Logement*, filtre *Logements détaillés*), le journal du bilan et la recherche.
+- **Accès** : digicode, interphone, gardien, boîtes aux lettres accessibles ou fermées, syndic.
+- Sur la carte (zoom de rue), une pastille indique les **logements faits / logements** de chaque immeuble ; le statut affiché est le plus avancé de ses logements.
+
+### Vue éloignée
+
+Une commune compte des milliers de bâtiments : seuls ceux de la zone visible sont dessinés. En vue éloignée (ou dans un quartier très dense), la carte montre l'**avancement par carreaux** d'environ 250 m (gris : rien de fait ; du vert clair au vert foncé : part des logements faits). Zoomez pour voir les bâtiments.
 
 ### Le dock d'outils (en bas)
 
@@ -161,9 +196,9 @@ La date retenue pour une maison dans l'activité est celle de son **dernier chan
 ## Sauvegarde, export, import
 
 Panneau **Données** :
-- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, qualifications, étiquettes, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, **tournées**, objectif, maisons chargées, réglages de la base, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
+- **Sauvegarde automatique** dans le navigateur (IndexedDB) : statuts, contacts, qualifications, étiquettes, notes, historiques, maisons ajoutées, adresses trouvées, secteurs, **tournées**, **logements d'immeubles**, types corrigés, objectif, bâtiments et adresses téléchargés, communes, téléchargements en cours, réglages de la base, position de la carte, fond choisi. Tout est restauré à l'ouverture. Les données sont propres au navigateur **et** à l'adresse (`localhost:8000`, `https://…github.io`) : pour changer d'appareil, exportez puis importez.
 - **Stockage protégé** : dès la première maison renseignée, l'application demande au navigateur de ne jamais effacer ses données, même si l'espace disque manque (`navigator.storage.persist()`). Chrome et Edge l'accordent en général sans rien demander (surtout si l'application est installée ou utilisée souvent) ; Firefox peut afficher une demande d'autorisation. L'état (protégé ou non, espace utilisé) est affiché dans **Données**, avec un bouton **Protéger** si besoin.
-- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 5, avec les tournées ; les sauvegardes des versions précédentes restent importables).
+- **Sauvegarde complète (JSON)** : à réimporter ailleurs (format versionné, schéma 6, avec les tournées, les logements, les communes et les bâtiments renseignés ; les sauvegardes des versions précédentes restent importables).
 - **Tableur (CSV)** : `id ; adresse ; nom ; telephone ; statut ; date ; potentiel ; projet ; echeance ; occupant ; etiquettes ; note ; logements ; latitude ; longitude`, séparateur `;`, UTF-8 avec BOM (s'ouvre directement dans Excel). Les cellules de texte commençant par `= + - @` sont préfixées d'une apostrophe (protection contre l'injection de formules).
 - **Importer** (glisser-déposer ou clic) : aperçu, puis **Fusionner** (en cas de doublon, la version la plus récente est gardée) ou **Remplacer** (avec, par défaut, une copie de sécurité de vos données actuelles). Le fichier est validé et nettoyé.
 - **Fichier lié** (Chrome / Edge) : réécrit automatiquement après chaque modification ; à reconnecter après un redémarrage du navigateur.
@@ -182,12 +217,12 @@ Pratique pour installer l'application sur téléphone en `https://`. Le workflow
 
 ## Limites à connaître
 
-- **Données OpenStreetMap** : certaines maisons manquent, beaucoup n'ont pas d'adresse, un immeuble est un seul bâtiment (utilisez « Ajouter » et le champ « Logements »).
-- **Overpass** est un service public gratuit, limité par adresse IP : en cas d'indisponibilité, réessayez plus tard.
+- **Données IGN** : très complètes en France, mais l'usage est parfois « indifférencié » (type *Usage inconnu*, masqué par défaut) et le nombre de logements peut être absent ou approximatif : corrigez-le dans la fiche. Environ une annexe sur deux n'a pas d'adresse (normal). Les données IGN se limitent à la France ; ailleurs, seul le secours OpenStreetMap (zone à l'écran) fonctionne.
+- **Services publics** (IGN, API géographique de l'État, Overpass) : gratuits, avec des limites de débit ; l'application les respecte (une requête à la fois, pauses, nouveaux essais espacés). En cas d'indisponibilité prolongée, le téléchargement attend d'être relancé (*Réessayer*).
 - **Clavier / lecteur d'écran** : les maisons sont dessinées sur un canevas et ne sont pas atteignables une à une au clavier ; utilisez la recherche (`Ctrl K`, par nom ou adresse), **Secteurs → Suivante** ou **Bilan → Journal**, qui ouvrent la fiche.
-- **Performance** : testé avec 6 000 maisons affichées. Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent). Les scripts sont chargés en parallèle (`defer`), les bibliothèques servies depuis le cache, et le flou des panneaux est suspendu pendant les déplacements de la carte.
+- **Performance** : testé avec 40 000 bâtiments (seuls ceux de la vue sont dessinés, carte d'avancement en vue éloignée). Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent). Les scripts sont chargés en parallèle (`defer`), les bibliothèques servies depuis le cache, et le flou des panneaux est suspendu pendant les déplacements de la carte.
 - **Meilleurs créneaux** : calculés sur vos propres passages ; avec peu de données, les pourcentages varient beaucoup (les cases de moins de 3 portes sont grisées, le « meilleur créneau » demande au moins 5 portes).
-- **Non vérifié en conditions réelles** : le développement s'est fait dans un environnement dont le réseau bloquait OpenStreetMap, l'IGN et Overpass ; leur comportement (CORS, limites, champ `distance` du géocodage inverse, tuiles IGN) a été testé avec des réponses simulées, comme le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
+- **Vérifications** : le téléchargement d'une commune a été vérifié avec les vrais services de l'IGN et de l'API géographique (pages de 5 000, CORS, champs) ; les tests automatiques utilisent des réponses simulées. Restent non vérifiés en conditions réelles : les tuiles et le géocodage inverse (`distance`), le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
 
 ## FAQ
 
@@ -195,7 +230,9 @@ Pratique pour installer l'application sur téléphone en `https://`. Le workflow
 
 **La carte reste grise.** Vérifiez la connexion ; essayez un autre fond. Ouverte par double-clic (`file://`), OpenStreetMap bloque les tuiles : utilisez `lancer.bat` / `lancer.sh`.
 
-**« Serveur de données occupé ».** Overpass limite les requêtes ; l'application réessaie seule jusqu'à 4 fois.
+**« Serveur occupé » / téléchargement interrompu.** Les services publics limitent les requêtes ; l'application réessaie seule (jusqu'à 5 fois par page), puis propose *Réessayer*. Rien n'est perdu : le téléchargement reprend là où il s'était arrêté.
+
+**Je ne vois pas les garages / entreprises.** Ils sont masqués par défaut : cochez leur type dans la légende (*Bâtiments affichés*).
 
 **Comment passer de l'ordinateur au téléphone ?** Données → Sauvegarde complète, transférez le fichier, puis Données → Importer sur l'autre appareil.
 
@@ -207,8 +244,9 @@ Aucun build, aucun npm pour l'application : des scripts classiques (pas de modul
 
 ```
 index.html  manifest.json  sw.js  lancer.bat  lancer.sh
-css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau · tournees · base
-js/    pwa · theme · ui · notifications · geocode · data · statuts · etiquettes · map · coquille · carte-ui · etiquettes-ui · panneau
+css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau · tournees · base · donnees-terrain
+js/    pwa · theme · ui · notifications · geocode · types · data · statuts · etiquettes · map · telechargements · coquille · carte-ui
+       telechargements-ui · etiquettes-ui · panneau · communes · communes-ui
        position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · tournees · defis · celebration · progression
        tournees-ui · base · outils · palette · store · echange · aide · app
 vendor/ leaflet 1.9.4 (BSD-2) · lucide (icônes, ISC, sous-ensemble en sprite SVG) · inter (police variable, SIL OFL)
@@ -216,14 +254,14 @@ icons/  icônes de l'application installée
 tests/  tests de bout en bout (Playwright) – non publiés
 ```
 
-- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `data.js` (Overpass : cache, reprises, miroir) · `secteurs.js` · `stats.js` (calculs) · `tournees.js` (tournées : passages, pauses, distance) · `defis.js` (records, badges, défis, expérience, tous dérivés des données) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
-- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `tournees-ui.js` (pilule, bilan de fin, vue Tournées) · `progression.js` + `celebration.js` (succès célébrés une fois, confettis) · `base.js` (tableau virtualisé, tris, filtres, colonnes, vues) · `notifications.js` · `theme.js`.
+- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `types.js` (types de bâtiments, logements) · `data.js` (IGN BD TOPO et BAN-PLUS, secours Overpass, conversion, rattachement des adresses) · `telechargements.js` (file de téléchargement : pages, nouveaux essais, reprise) · `communes.js` (geo.api.gouv.fr, contours) · `secteurs.js` · `stats.js` (calculs) · `tournees.js` (tournées : passages, pauses, distance) · `defis.js` (records, badges, défis, expérience, tous dérivés des données) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
+- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende, types affichés) · `map.js` (dessin des seuls bâtiments visibles, index en grille, carte d'avancement) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche : maison, immeuble, logement) · `telechargements-ui.js` (carte de progression) · `communes-ui.js` (recherche et liste des communes) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `tournees-ui.js` (pilule, bilan de fin, vue Tournées) · `progression.js` + `celebration.js` (succès célébrés une fois, confettis) · `base.js` (tableau virtualisé, tris, filtres, colonnes, vues) · `notifications.js` · `theme.js`.
 - **Design** : jetons (couleurs, rayons, ombres, mouvements) dans `css/tokens.css`, thème posé sur `<html data-theme>`. Les couleurs des statuts forment une palette catégorielle validée pour les daltoniens (clair et sombre).
 - **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION`), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.
 - **Tests** : `node tests/e2e.js` (Playwright doit être installé ; `axe-core` facultatif pour les contrôles d'accessibilité automatiques ; `node tests/e2e.js secteurs` ne lance qu'une rubrique). Les services externes sont simulés par interception réseau : les tests ne dépendent pas d'Internet.
 
 ## Données et vie privée
 
-Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, maisons d'une zone). La position GPS n'est jamais envoyée. Les fiches peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports et respectez le RGPD (informez les personnes, ne conservez que le nécessaire).
+Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, bâtiments et adresses d'une zone ou d'une commune : IGN `data.geopf.fr`, `geo.api.gouv.fr`, et Overpass en secours). La position GPS n'est jamais envoyée. Les fiches peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports et respectez le RGPD (informez les personnes, ne conservez que le nécessaire).
 
-Cartes © contributeurs OpenStreetMap, © IGN · Icônes [Lucide](https://lucide.dev) (ISC) · Police [Inter](https://rsms.me/inter/) (SIL OFL) · [Leaflet](https://leafletjs.com) (BSD-2).
+Cartes © contributeurs OpenStreetMap, © IGN · Bâtiments : IGN BD TOPO® et BAN-PLUS (Licence Ouverte Etalab 2.0) · Communes : API Découpage administratif (geo.api.gouv.fr) · Icônes [Lucide](https://lucide.dev) (ISC) · Police [Inter](https://rsms.me/inter/) (SIL OFL) · [Leaflet](https://leafletjs.com) (BSD-2).

@@ -43,12 +43,18 @@ var CarteUi = (function () {
 
   function majPastille() {
     if (!map) return;
-    if (enChargement) { contenuPastille('discret', 'loader-circle', 'Chargement des maisons…', true); pastille.disabled = true; return; }
+    // Un téléchargement en cours a sa propre carte de progression
+    if (Telechargements.visibles().length && !resultatAffiche) { pastille.hidden = true; return; }
+    if (enChargement && !Telechargements.visibles().length) { contenuPastille('discret', 'loader-circle', 'Chargement des maisons…', true); pastille.disabled = true; return; }
     pastille.disabled = false;
     if (resultatAffiche) { contenuPastille('fait', 'circle-check', resultatAffiche); return; }
     var z = map.getZoom();
-    if (z < DataImmo.config.zoomMin) { contenuPastille('discret', 'scan-search', 'Zoomez pour afficher les maisons'); pastille.dataset.action = 'zoom'; return; }
+    if (z < DataImmo.config.zoomMin) {
+      if (CarteImmo.total()) { contenuPastille('discret', 'scan-search', 'Zoomez pour voir les bâtiments'); pastille.dataset.action = 'zoom'; return; }   // vue éloignée : carte d'avancement
+      contenuPastille('discret', 'scan-search', 'Zoomez pour afficher les maisons'); pastille.dataset.action = 'zoom'; return;
+    }
     if (DataImmo.estCharge(map.getBounds())) { pastille.hidden = true; return; }
+    if (DataImmo.surfaceKm2(DataImmo.boite(map.getBounds())) > DataImmo.config.surfaceMaxKm2) { contenuPastille('discret', 'scan-search', 'Zoomez pour charger cette zone'); pastille.dataset.action = 'zoom'; return; }
     contenuPastille('action', 'download', 'Charger les maisons de cette zone');
     pastille.dataset.action = 'charger';
   }
@@ -57,28 +63,30 @@ var CarteUi = (function () {
     if (enChargement) return;
     if (!navigator.onLine) { Notif.alerter('Vous êtes hors ligne : impossible de charger de nouvelles maisons.', 'horsligne'); return; }
     enChargement = true; majPastille();
-    DataImmo.charger(map.getBounds(), map.getZoom(), function (n, max, delai) {
-      Notif.afficher('Serveur de données occupé, nouvel essai ' + n + '/' + max + ' dans ' + Math.round(delai / 1000) + ' s…', { type: 'alerte', cle: 'charger' });
-    }).then(function (res) {
-      CarteImmo.afficherBatiments(res.nouveaux);
+    Telechargements.zone(map.getBounds()).then(function (res) {
       majLegende();
-      if (!res.dejaCharge) { Store.enregistrerBatiments(res.nouveaux); Store.enregistrerZones(DataImmo.zones()); }
-      resultatAffiche = res.dejaCharge ? 'Zone déjà chargée' : (res.nouveaux.length ? res.nouveaux.length + ' maison' + (res.nouveaux.length > 1 ? 's' : '') + ' ajoutée' + (res.nouveaux.length > 1 ? 's' : '') : 'Aucune nouvelle maison ici');
+      var n = res.nouveaux;
+      resultatAffiche = res.dejaCharge ? 'Zone déjà chargée' : (n ? Ui.nombre(n) + ' bâtiment' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '') : 'Aucun nouveau bâtiment ici');
+      if (res.avertissement) Notif.afficher(res.avertissement, { type: 'alerte', duree: 9000 });
+      if (res.rattaches) Notif.afficher(res.rattaches + ' fiche' + (res.rattaches > 1 ? 's' : '') + ' rattachée' + (res.rattaches > 1 ? 's' : '') + ' aux bâtiments IGN.', { type: 'info' });
       clearTimeout(timerResultat);
       timerResultat = setTimeout(function () { resultatAffiche = null; majPastille(); }, 2600);
       masquerAccueil();
     }).catch(function (err) {
-      Notif.afficher(err.message || 'Chargement impossible.', { type: 'erreur', cle: 'charger' });
+      if (!/annulé/.test(err.message)) Notif.afficher(err.message || 'Chargement impossible.', { type: 'erreur', cle: 'charger' });
     }).finally(function () { enChargement = false; majPastille(); });
   }
 
   // ---------- Légende ----------
   function majLegende() {
     if (!legende) return;
-    var total = CarteImmo.total(), c = Statuts.compter(total);
+    // Compteurs en logements (portes) : un immeuble de 30 logements compte pour 30
+    var ids = CarteImmo.ids(), c = Statuts.compterLogements(ids), total = c.total;
     var faits = total - c.aucun;
-    legende.querySelector('.total').textContent = Ui.nombre(total) + ' maison' + (total > 1 ? 's' : '');
+    legende.querySelector('.total').textContent = Ui.nombre(total) + ' logement' + (total > 1 ? 's' : '');
+    legende.querySelector('.total').title = Ui.nombre(ids.length) + ' bâtiments affichés';
     legende.querySelectorAll('.ligne-legende').forEach(function (b) { b.querySelector('.compte').textContent = Ui.nombre(c[b.dataset.statut] || 0); });
+    majTypes();
     var pct = total ? Math.round(100 * faits / total) : 0;
     legende.querySelector('.avancement-carte .pct').textContent = pct + ' %';
     legende.querySelector('.avancement-carte .jauge > span').style.width = pct + '%';
@@ -108,6 +116,20 @@ var CarteUi = (function () {
     sel.addEventListener('change', function () { appliquerFiltre(sel.value); });
     filtreSelect = sel;
     majFiltres();
+    // Types de bâtiments affichés (« à prospecter ») : les autres restent masqués et ne comptent pas
+    var types = Ui.el('div', 'types-legende'); types.id = 'types-legende';
+    types.appendChild(Ui.el('div', 'sous-titre', 'Bâtiments affichés'));
+    var puces = Ui.el('div', 'puces-types');
+    TypesBati.LISTE.forEach(function (t) {
+      var b = Ui.bouton([Ui.icone(t.icone, 'ic-sm'), t.court, Ui.el('span', 'compte', '')], 'puce-type', function () {
+        TypesBati.basculer(t.id, !TypesBati.estActif(t.id));
+        Store.kvSet('types', TypesBati.exporter());
+        majLegende();
+      }, { 'aria-pressed': TypesBati.estActif(t.id) ? 'true' : 'false', title: t.label, 'data-type': t.id });
+      puces.appendChild(b);
+    });
+    types.appendChild(puces);
+    corps.appendChild(types);
     var av = Ui.el('div', 'avancement-carte');
     var st = Ui.el('div', 'sous-titre'); st.appendChild(Ui.el('span', null, 'Avancement')); st.appendChild(Ui.el('strong', 'pct num', '0 %'));
     av.appendChild(st);
@@ -124,6 +146,21 @@ var CarteUi = (function () {
     majLegende();
   }
 
+  // Nombre de bâtiments par type (tous les bâtiments chargés) et état des puces
+  var timerTypes = null;
+  function majTypes() {
+    clearTimeout(timerTypes);
+    timerTypes = setTimeout(function () {
+      var n = {};
+      CarteImmo.ids(true).forEach(function (id) { var t = TypesBati.typeDe(id); n[t] = (n[t] || 0) + 1; });
+      legende.querySelectorAll('.puce-type').forEach(function (b) {
+        b.setAttribute('aria-pressed', TypesBati.estActif(b.dataset.type) ? 'true' : 'false');
+        b.querySelector('.compte').textContent = n[b.dataset.type] ? Ui.nombre(n[b.dataset.type]) : '';
+        b.hidden = !n[b.dataset.type] && !TypesBati.estActif(b.dataset.type);
+      });
+    }, 150);
+  }
+
   // ---------- Filtre de la légende ----------
   var filtreSelect = null;
   function majFiltres() {
@@ -131,7 +168,7 @@ var CarteUi = (function () {
     var v = filtreSelect.value;
     filtreSelect.innerHTML = '';
     function opt(val, txt, parent) { var o = Ui.el('option', null, txt); o.value = val; (parent || filtreSelect).appendChild(o); }
-    opt('', 'Toutes les maisons');
+    opt('', 'Tous les bâtiments affichés');
     var g1 = Ui.el('optgroup'); g1.label = 'Potentiel';
     Statuts.QUALIF.potentiel.valeurs.forEach(function (x) { opt('potentiel:' + x[0], 'Potentiel ' + x[1].toLowerCase(), g1); });
     filtreSelect.appendChild(g1);
@@ -169,7 +206,7 @@ var CarteUi = (function () {
     map = carte;
     pastille = document.getElementById('pastille-charger');
     pastille.addEventListener('click', function () {
-      if (pastille.dataset.action === 'zoom' && map.getZoom() < DataImmo.config.zoomMin) map.setZoom(DataImmo.config.zoomMin);
+      if (pastille.dataset.action === 'zoom') map.setZoom(Math.max(map.getZoom() + 1, DataImmo.config.zoomMin));
       else if (pastille.dataset.action === 'charger') charger();
     });
     initFonds();
@@ -177,7 +214,7 @@ var CarteUi = (function () {
     document.getElementById('btn-zoom-plus').addEventListener('click', function () { map.zoomIn(); });
     document.getElementById('btn-zoom-moins').addEventListener('click', function () { map.zoomOut(); });
     var barre = document.getElementById('progression');
-    DataImmo.surActivite(function (v) { barre.classList.toggle('active', v); });
+    Telechargements.surChangement(function () { barre.classList.toggle('active', !!Telechargements.actif()); });
     map.on('moveend zoomend', function () { majPastille(); majAccueil(); });
     // Suspend le flou des panneaux flottants pendant les déplacements (fluidité, surtout sur téléphone)
     var scene = document.getElementById('scene');

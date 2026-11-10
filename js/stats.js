@@ -32,7 +32,10 @@ var Stats = (function () {
 
   // ---------- Éléments réels ----------
 
-  // Un élément par bâtiment connu (chargé sur la carte) ou ayant un statut
+  // Poids d'un élément = nombre de logements (portes) qu'il représente
+  function w(e) { return e.poids === undefined ? 1 : e.poids; }
+
+  // Un élément par bâtiment affiché ou ayant une fiche, et un par logement détaillé d'immeuble
   function elementsReels() {
     var centres = CarteImmo.tousCentres(), recs = Statuts._records(), adr = Statuts.adressesToutes();
     var ids = {}; Object.keys(centres).forEach(function (i) { ids[i] = 1; }); Object.keys(recs).forEach(function (i) { ids[i] = 1; });
@@ -40,19 +43,28 @@ var Stats = (function () {
     Secteurs.liste().forEach(function (s) {
       Secteurs.membresDe(s.id).forEach(function (b) { (secteursDe[b] = secteursDe[b] || []).push(s.id); });
     });
-    var man = Statuts.manuels();
-    return Object.keys(ids).map(function (id) {
-      var r = recs[id] || {}, f = DataImmo.batiment(id), c = centres[id] || (man[id] ? [man[id].lat, man[id].lon] : null);
+    var man = Statuts.manuels(), res = [];
+    Object.keys(ids).forEach(function (id) {
+      if (Statuts.estLot(id)) return;   // les logements sont ajoutés avec leur immeuble
+      var r = recs[id] || {}, f = DataImmo.batiment(id), c = centres[id] || CarteImmo.centre(id) || (man[id] ? [man[id].lat, man[id].lon] : null);
       var texteAdr = (f && DataImmo.adresse(f.properties)) || adr[id] || '';
-      // Rue : étiquette OSM (sans un éventuel code postal collé), sinon tirée de l'adresse trouvée
+      // Rue : adresse du bâtiment (sans un éventuel code postal collé), sinon tirée de l'adresse trouvée
       var rue = (f && f.properties['addr:street'] ? f.properties['addr:street'].replace(/[\s,]*\b\d{5}\b.*$/, '').trim() : '') || rueDe(adr[id]);
-      return {
-        id: id, statut: r.statut || 'aucun', date: r.date || '', note: r.note || '', logements: r.logements || 0,
-        nom: r.nom || '', tel: r.tel || '', historique: r.historique || [], etiquettes: r.etiquettes || [],
-        occupant: r.occupant || '', projet: r.projet || '', echeance: r.echeance || '', potentiel: r.potentiel || '',
-        adresse: texteAdr, rue: rue || '', secteurs: secteursDe[id] || [], lat: c ? c[0] : null, lon: c ? c[1] : null
-      };
+      var type = man[id] && !r.type ? 'maison' : TypesBati.typeDe(id), nLog = Statuts.avancement(id).total;
+      var commun = { adresse: texteAdr, rue: rue || '', secteurs: secteursDe[id] || [], lat: c ? c[0] : null, lon: c ? c[1] : null, type: type, nbLogements: nLog, parent: id };
+      res.push(Object.assign(element(id, r), commun, { poids: Statuts.poids(id), logements: r.logements || 0 }));
+      Statuts.lotsDe(id).forEach(function (l) {
+        res.push(Object.assign(element(l, recs[l] || {}), commun, { poids: 1, logement: (recs[l] || {}).libelle || 'Logement', logements: 0 }));
+      });
     });
+    return res;
+  }
+  function element(id, r) {
+    return {
+      id: id, statut: r.statut || 'aucun', date: r.date || '', note: r.note || '',
+      nom: r.nom || '', tel: r.tel || '', historique: r.historique || [], etiquettes: r.etiquettes || [],
+      occupant: r.occupant || '', projet: r.projet || '', echeance: r.echeance || '', potentiel: r.potentiel || ''
+    };
   }
 
   // ---------- Jeu de démonstration (jamais enregistré, ne touche pas aux vraies données) ----------
@@ -75,7 +87,7 @@ var Stats = (function () {
       var nb = 18 + Math.floor(rnd() * 14), avancement = 0.35 + rnd() * 0.65;
       for (var i = 1; i <= nb; i++) {
         var e = { id: 'demo/' + (++n), statut: 'aucun', date: '', note: '', nom: '', tel: '', historique: [], etiquettes: [], occupant: '', projet: '', echeance: '', potentiel: '',
-          logements: rnd() < 0.1 ? 2 + Math.floor(rnd() * 6) : 0, adresse: i + ' ' + rue, rue: rue, secteurs: [secteurs[k % 2]], lat: null, lon: null };
+          logements: 0, poids: 1, type: 'maison', adresse: i + ' ' + rue, rue: rue, secteurs: [secteurs[k % 2]], lat: null, lon: null };
         if (rnd() < avancement) {
           // Passage : jour et heure ; on trouve plus souvent quelqu'un en fin de journée et le samedi
           var j = Math.floor(Math.pow(rnd(), 1.5) * 60), h = 9 + Math.floor(rnd() * 11);
@@ -128,12 +140,14 @@ var Stats = (function () {
   function chiffres(items) {
     var par = {}; Statuts.LISTE.forEach(function (s) { par[s.id] = 0; });
     var logements = 0, contacts = 0;
+    var total = 0;
     items.forEach(function (e) {
-      par[e.statut]++;
-      if (e.statut !== 'aucun') logements += e.logements || 1;
-      if (Statuts.CONTACTS.indexOf(e.statut) >= 0) contacts++;
+      var p = w(e);
+      par[e.statut] += p; total += p;
+      if (e.statut !== 'aucun') logements += p;
+      if (Statuts.CONTACTS.indexOf(e.statut) >= 0) contacts += p;
     });
-    var total = items.length, faits = total - par.aucun;
+    var faits = total - par.aucun;
     return { total: total, faits: faits, aFaire: par.aucun, par: par, logements: logements, contacts: contacts,
       tauxContact: faits ? Math.round(1000 * contacts / faits) / 10 : null };
   }
@@ -144,18 +158,19 @@ var Stats = (function () {
     return statuts.indexOf(e.statut) >= 0 || (e.historique || []).some(function (h) { return statuts.indexOf(h.statut) >= 0; });
   }
   function entonnoir(items) {
-    var faits = items.filter(function (e) { return e.statut !== 'aucun'; });
+    var faits = items.filter(function (e) { return e.statut !== 'aucun' && w(e) > 0; });
+    var somme = function (l) { return l.reduce(function (t, e) { return t + w(e); }, 0); };
     var etapes = [
-      { id: 'faits', libelle: 'Portes faites', n: faits.length },
-      { id: 'contacts', libelle: 'Contacts', n: faits.filter(function (e) { return atteint(e, Statuts.CONTACTS); }).length },
-      { id: 'estimations', libelle: 'Estimations', n: faits.filter(function (e) { return atteint(e, ['estimation', 'mandat']); }).length },
-      { id: 'mandats', libelle: 'Mandats signés', n: faits.filter(function (e) { return atteint(e, ['mandat']); }).length }
+      { id: 'faits', libelle: 'Portes faites', n: somme(faits) },
+      { id: 'contacts', libelle: 'Contacts', n: somme(faits.filter(function (e) { return atteint(e, Statuts.CONTACTS); })) },
+      { id: 'estimations', libelle: 'Estimations', n: somme(faits.filter(function (e) { return atteint(e, ['estimation', 'mandat']); })) },
+      { id: 'mandats', libelle: 'Mandats signés', n: somme(faits.filter(function (e) { return atteint(e, ['mandat']); })) }
     ];
     etapes.forEach(function (x, i) {
       x.pctPrecedent = i && etapes[i - 1].n ? Math.round(100 * x.n / etapes[i - 1].n) : null;
       x.pctTotal = etapes[0].n ? Math.round(1000 * x.n / etapes[0].n) / 10 : null;
     });
-    return { etapes: etapes, concurrents: faits.filter(function (e) { return e.statut === 'concurrent'; }).length };
+    return { etapes: etapes, concurrents: somme(faits.filter(function (e) { return e.statut === 'concurrent'; })) };
   }
 
   // ---------- Meilleurs créneaux : taux de contact par jour de la semaine et moment de la journée ----------
@@ -168,13 +183,14 @@ var Stats = (function () {
     var total = 0;
     items.forEach(function (e) {
       // Chaque passage compte (historique) ; à défaut, le dernier statut et sa date
-      var passages = e.historique && e.historique.length ? e.historique : (e.statut !== 'aucun' && e.date ? [{ statut: e.statut, date: e.date }] : []);
+      var passages = e.historique && e.historique.length ? e.historique : (e.statut !== 'aucun' && e.date && w(e) > 0 ? [{ statut: e.statut, date: e.date, n: w(e) }] : []);
       passages.forEach(function (p) {
         if (!p.date || p.date.length < 13 || (debut && p.date.slice(0, 10) < debut)) return;
         if (['estimation', 'mandat', 'concurrent'].indexOf(p.statut) >= 0) return;   // étapes de suivi, pas des passages à la porte
         var d = dateDepuisJour(p.date.slice(0, 10)), c = grille[(d.getDay() + 6) % 7][moment(+p.date.slice(11, 13))];
-        c.portes++; total++;
-        if (Statuts.CONTACTS.indexOf(p.statut) >= 0) c.contacts++;
+        var n = p.n > 1 ? p.n : 1;
+        c.portes += n; total += n;
+        if (Statuts.CONTACTS.indexOf(p.statut) >= 0) c.contacts += n;
       });
     });
     var meilleur = null;
@@ -236,7 +252,7 @@ var Stats = (function () {
       var j = dateDepuisJour(e.date.slice(0, 10));
       if (j < debut || j > auj) return;
       var cle = jourDe(granularite === 'semaine' ? lundi(j) : j), b = index[cle];
-      if (b && b.par[e.statut] !== undefined) { b.par[e.statut]++; b.total++; }
+      if (b && b.par[e.statut] !== undefined) { b.par[e.statut] += w(e); b.total += w(e); }
     });
     return { buckets: buckets, granularite: granularite, auto: auto };
   }
@@ -248,8 +264,9 @@ var Stats = (function () {
     items.forEach(function (e) {
       var nom = e.rue || '';
       var r = m[nom] || (m[nom] = { nom: nom, total: 0, faits: 0, par: {} });
-      r.total++; if (e.statut !== 'aucun') r.faits++;
-      r.par[e.statut] = (r.par[e.statut] || 0) + 1;
+      var p = w(e);
+      r.total += p; if (e.statut !== 'aucun') r.faits += p;
+      r.par[e.statut] = (r.par[e.statut] || 0) + p;
     });
     return Object.keys(m).map(function (k) { var r = m[k]; r.pct = r.total ? Math.round(100 * r.faits / r.total) : 0; r.termine = r.faits >= r.total; return r; });
   }
@@ -288,8 +305,8 @@ var Stats = (function () {
     items.forEach(function (e) {
       if (e.statut === 'aucun' || !e.date || (secteur && e.secteurs.indexOf(secteur) < 0)) return;
       var j = e.date.slice(0, 10);
-      if (j >= lun) semaine++;
-      if (j === j0) jour++;
+      if (j >= lun) semaine += w(e);
+      if (j === j0) jour += w(e);
     });
     return { semaine: semaine, aujourdhui: jour, serie: serieJours(items, secteur) };
   }
@@ -299,6 +316,6 @@ var Stats = (function () {
     precedente: precedente, rythme: rythme,
     rueDe: rueDe, elementsReels: elementsReels, elementsDemo: elementsDemo, nomsDemo: NOMS_DEMO,
     filtrer: filtrer, chiffres: chiffres, serie: serie, rues: rues,
-    jourDe: jourDe, aujourdhui: aujourdhui, dateDepuisJour: dateDepuisJour
+    jourDe: jourDe, aujourdhui: aujourdhui, dateDepuisJour: dateDepuisJour, poids: w
   };
 })();

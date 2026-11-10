@@ -181,10 +181,11 @@ var Outils = (function () {
     if (mode === 'secteur') { if (ll) Secteurs.ajouterPoint(ll); return; }
     if (mode === 'tournee') {
       if (Statuts.statutDe(id) === statutTournee) { CarteImmo.onde(id); return; }
+      var n = Statuts.poids(id);
       Statuts.modifier([id], { statut: statutTournee });
       CarteImmo.onde(id, statutTournee); Ui.vibrer();
-      serieTournee++;
-      Notif.afficher(Statuts.parId(statutTournee).label + (serieTournee > 1 ? ' · ' + serieTournee + ' maisons' : ''), {
+      serieTournee += Math.max(1, n);
+      Notif.afficher(Statuts.parId(statutTournee).label + (n > 1 ? ' · immeuble, ' + n + ' logements' : '') + (serieTournee > Math.max(1, n) ? ' · ' + serieTournee + ' portes' : ''), {
         type: 'succes', cle: 'tournee', duree: 4500, action: { texte: 'Annuler', fn: function () { serieTournee = Math.max(0, serieTournee - 1); annuler(); } }
       });
     } else if (mode === 'consulter') Panneau.ouvrir(id);

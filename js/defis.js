@@ -18,11 +18,11 @@ var Defis = (function () {
   function cleSemaine(d) { return jourDe(lundi(d)); }
 
   // ---------- Collecte des données ----------
-  // Tous les passages de l'historique : { id, statut, date ('AAAA-MM-JJTHH:mm'), jour }
+  // Tous les passages de l'historique : { id, statut, date ('AAAA-MM-JJTHH:mm'), jour, n (logements concernés) }
   function passages() {
     var recs = Statuts._records(), r = [];
     Object.keys(recs).forEach(function (id) {
-      (recs[id].historique || []).forEach(function (h) { if (h.date) r.push({ id: id, statut: h.statut, date: h.date, jour: h.date.slice(0, 10) }); });
+      (recs[id].historique || []).forEach(function (h) { if (h.date) r.push({ id: id, statut: h.statut, date: h.date, jour: h.date.slice(0, 10), n: h.n > 1 ? h.n : 1 }); });
     });
     return r;
   }
@@ -34,9 +34,9 @@ var Defis = (function () {
     ps.forEach(function (p) {
       var porte = PORTE.indexOf(p.statut) >= 0;
       if (porte) {
-        a.portes++;
-        parJour[p.jour] = (parJour[p.jour] || 0) + 1;
-        var s = cleSemaine(dateJour(p.jour)); parSemaine[s] = (parSemaine[s] || 0) + 1;
+        a.portes += p.n;
+        parJour[p.jour] = (parJour[p.jour] || 0) + p.n;
+        var s = cleSemaine(dateJour(p.jour)); parSemaine[s] = (parSemaine[s] || 0) + p.n;
         if (p.date.slice(11, 16) >= '19:30') a.tard = true;
       }
       if (Statuts.CONTACTS.indexOf(p.statut) >= 0 && p.statut !== 'estimation' && p.statut !== 'mandat') { a.contacts++; contactsJour[p.jour] = (contactsJour[p.jour] || 0) + 1; }
@@ -150,7 +150,7 @@ var Defis = (function () {
     var estContact = function (p) { return ['contact', 'rappeler'].indexOf(p.statut) >= 0; };
     var ps = a.ps.filter(function (p) { return dansSemaine(p.jour); });
     var tSem = a.statsTournees.filter(function (x) { return dansSemaine(jourDe(new Date(x.t.debut))); });
-    var portes = ps.filter(estPorte).length, contacts = ps.filter(estContact).length;
+    var portes = ps.filter(estPorte).reduce(function (t, p) { return t + p.n; }, 0), contacts = ps.filter(estContact).length;
     var cPortes = Math.max(50, Math.ceil(moy(function (d1, d2) { return compte(d1, d2, a.parJour); }) * 1.15 / 10) * 10);
     var cContacts = Math.max(5, Math.ceil(moy(function (d1, d2) { return compte(d1, d2, a.contactsRJ); }) * 1.15));
     var jours = {}; ps.filter(estPorte).forEach(function (p) { jours[p.jour] = 1; });
@@ -178,7 +178,7 @@ var Defis = (function () {
   function experience(a) {
     a = a || agregats();
     var xp = 0;
-    a.ps.forEach(function (p) { xp += POINTS[p.statut] || 0; });
+    a.ps.forEach(function (p) { xp += (POINTS[p.statut] || 0) * (PORTE.indexOf(p.statut) >= 0 ? p.n : 1); });
     xp += a.tournees.length * 20;
     badges(a).forEach(function (b) { if (b.ok) xp += b.xp; });
     // Défis réussis, semaine par semaine, depuis la première activité (2 ans au plus)
