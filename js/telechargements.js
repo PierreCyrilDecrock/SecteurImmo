@@ -46,7 +46,7 @@ var Telechargements = (function () {
       id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), type: type, nom: nom, ref: ref || null, zone: zone,
       etapes: [{ couche: 'bat', debut: 0, total: null, fini: false }, { couche: 'adr', debut: 0, total: null, fini: false }, { couche: 'lien', debut: 0, total: null, fini: false }],
       etat: 'attente', erreur: null, message: null, avertissement: null, essais: 0, page: DataImmo.config.page,
-      recus: { bat: 0, nouveaux: 0, adresses: 0, lies: 0, rattaches: 0 }, adresses: {}, cree: Date.now(), source: 'ign'
+      recus: { bat: 0, nouveaux: 0, adresses: 0, lies: 0, rattaches: 0 }, adresses: {}, liens: {}, cree: Date.now(), source: 'ign'
     };
     taches.push(t);
     sauver(); signaler(); lancer();
@@ -130,8 +130,9 @@ var Telechargements = (function () {
       DataImmo.lireAdresses(json, t.adresses);
       t.recus.adresses += Object.keys(t.adresses).length - avant;
     } else {
-      var mod = DataImmo.lierAdresses(json, t.adresses);
-      t.recus.lies += mod.length;
+      t.liens = t.liens || {};
+      var mod = DataImmo.lierAdresses(json, t.adresses, t.liens);
+      t.recus.lies = Object.keys(t.liens).length;
       if (mod.length) { Store.enregistrerBatiments(mod); CarteImmo.signalerModifies(mod.map(function (f) { return f.id; })); }
     }
   }
@@ -154,7 +155,7 @@ var Telechargements = (function () {
 
   function terminer(t) {
     t.etat = 'fini'; t.finT = Date.now(); t.message = null;
-    delete t.adresses;
+    delete t.adresses; delete t.liens;
     DataImmo.ajouterZone({ b: t.zone.b, poly: t.zone.poly, src: t.source });
     Store.enregistrerZones(DataImmo.zones());
     elaguer();
@@ -254,7 +255,7 @@ var Telechargements = (function () {
     taches = (Array.isArray(liste) ? liste : []).filter(function (t) { return t && t.id && t.zone && Array.isArray(t.etapes); });
     taches.forEach(function (t) {
       if (t.etat === 'en-cours') t.etat = 'attente';   // interrompue par la fermeture : reprise
-      t.essais = 0; t.message = null; t.adresses = t.adresses || {};
+      t.essais = 0; t.message = null; t.adresses = t.adresses || {}; t.liens = t.liens || {};
     });
     signaler();
   }

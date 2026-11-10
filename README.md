@@ -50,7 +50,7 @@ Au premier lancement, une courte présentation explique l'essentiel. Ensuite :
 
 Les bâtiments et leurs adresses viennent de l'**IGN** (Géoplateforme, données ouvertes) :
 - **BD TOPO** : le contour de chaque bâtiment, son **usage** (résidentiel, commercial, industriel, annexe…), son **nombre de logements** et d'étages ;
-- **BAN-PLUS** : les adresses officielles, rattachées à chaque bâtiment (un immeuble peut en avoir plusieurs).
+- **BAN-PLUS** : les adresses officielles, rattachées à chaque bâtiment (un immeuble peut en avoir plusieurs). Dans une résidence, l'IGN relie souvent toutes les adresses de la parcelle à tous ses bâtiments : l'application ne garde pour chaque bâtiment que les entrées qui le touchent (à défaut, la plus proche). Les numéros d'une même rue sont regroupés (« 2, 3 Rue Colonel Sebbane ») ; la fiche liste toutes les adresses du bâtiment.
 
 Trois façons de télécharger :
 - **Une commune entière** : *Secteurs → Communes*, tapez le nom ou le code postal (ou cherchez la commune avec `Ctrl K` → « Télécharger toute la commune »). Le contour officiel de la commune (API géographique de l'État, `geo.api.gouv.fr`) s'affiche sur la carte. Ordre de grandeur : une commune de 4 000 habitants (environ 4 200 bâtiments) en une vingtaine de secondes.
@@ -66,7 +66,7 @@ Pendant un téléchargement, une **carte de progression** (en bas de la carte) i
 - en cas d'échec : message clair et bouton **Réessayer** ; si seules les adresses manquent, les bâtiments sont gardés (l'adresse est alors cherchée à l'ouverture de la fiche) ;
 - **secours** : pour une zone à l'écran, si l'IGN ne répond pas, les bâtiments sont pris dans OpenStreetMap (Overpass, 6 km² au plus) ; quand l'IGN revient, ils sont remplacés par les bâtiments IGN et leurs fiches (statuts, contacts, notes) y sont rattachées automatiquement. Les fiches créées avec les anciennes versions de l'application (bâtiments OpenStreetMap) sont rattachées de la même façon au premier téléchargement IGN de la zone.
 
-Une zone déjà téléchargée n'est pas proposée de nouveau pendant 30 jours (*Mettre à jour* une commune ajoute les nouveaux bâtiments). Les tuiles de fond de carte ne sont jamais téléchargées en masse.
+Une zone déjà téléchargée n'est pas proposée de nouveau pendant 30 jours (*Mettre à jour* une commune ajoute les nouveaux bâtiments et recalcule les adresses, sans toucher aux fiches). Les tuiles de fond de carte ne sont jamais téléchargées en masse.
 
 ### Types de bâtiments
 

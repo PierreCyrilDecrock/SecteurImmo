@@ -802,11 +802,18 @@ rubrique('Types de bâtiments et immeubles', async (env) => {
   els[2].tags = { building: 'shed' };
   els[3].tags = { building: 'retail', 'addr:street': 'Rue des Lilas', 'addr:housenumber': '7' };
   els[4].tags = { building: 'house', 'test:usage2': 'Commercial et services', 'addr:street': 'Avenue du Parc', 'addr:housenumber': '1' };
+  // Résidence : 3 bâtiments sur une même parcelle, 4 entrées (deux pour le 2e bâtiment), toutes reliées à tous
+  els[9].tags = { building: 'apartments', 'building:flats': '8', 'addr:street': 'Rue Colonel Test', 'addr:housenumber': '3', 'test:parcelle': 'P1' };
+  els[10].tags = { building: 'apartments', 'building:flats': '8', 'addr:street': 'Rue Colonel Test', 'addr:housenumber': '5', 'test:parcelle': 'P1' };
+  els[11].tags = { building: 'apartments', 'building:flats': '8', 'addr:street': 'Rue Voisine', 'addr:housenumber': '43', 'test:rep': 'bis', 'test:parcelle': 'P1' };
+  els.push({ type: 'way', id: 112, tags: { building: 'garage', 'addr:street': 'Rue Colonel Test', 'addr:housenumber': '7', 'test:parcelle': 'P1' }, geometry: els[10].geometry.map(g => ({ lat: g.lat - 0.00001, lon: g.lon + 0.00002 })) });
   const p = await page(env, { batiments: els });
   await chargerZone(p);
+  ok(await p.evaluate(() => [DataImmo.adresse(DataImmo.batiment('bdt/109').properties), DataImmo.adresse(DataImmo.batiment('bdt/110').properties), DataImmo.adresse(DataImmo.batiment('bdt/111').properties)].join(' / ')) === '3 Rue Colonel Test / 5, 7 Rue Colonel Test / 43 bis Rue Voisine',
+    'résidence (adresses reliées à toute la parcelle) : chaque bâtiment garde les entrées qui le touchent');
   const types = await p.evaluate(() => ['bdt/100', 'bdt/101', 'bdt/102', 'bdt/103', 'bdt/104'].map(TypesBati.typeDe).join());
   ok(types === 'maison,immeuble,annexe,commerce,mixte', 'types déduits de la BD TOPO (' + types + ')');
-  ok(await p.evaluate(() => CarteImmo.total()) === 10 && /39 logements/.test(await p.locator('#legende .total').innerText()), 'annexe et entreprise masquées par défaut ; légende en logements (39)');
+  ok(await p.evaluate(() => CarteImmo.total()) === 10 && /60 logements/.test(await p.locator('#legende .total').innerText()), 'annexes et entreprise masquées par défaut ; légende en logements (60)');
   await p.click('#legende .puce-type[data-type=commerce]');
   ok(await p.evaluate(() => CarteImmo.total()) === 11 && await p.evaluate(() => TypesBati.aProspecter('bdt/103')), 'afficher les entreprises (option)');
   await p.click('#legende .puce-type[data-type=commerce]');
@@ -846,7 +853,7 @@ rubrique('Types de bâtiments et immeubles', async (env) => {
   await p.click('#base-btn-filtres'); await p.click('[data-filtre="logements"]');
   ok(await p.locator('.base-corps .base-ligne').count() === 1 && /Apt 12/.test(await p.locator('.base-corps').innerText()), 'base : filtre « Logements détaillés »');
   await p.click('[data-filtre="logements"]'); await p.click('[data-filtre="type:immeuble"]');
-  ok(await p.locator('.base-corps .base-ligne').count() === 2, 'base : filtre par type de bâtiment (l\'immeuble et son logement)');
+  ok(await p.locator('.base-corps .base-ligne').count() === 5, 'base : filtre par type de bâtiment (4 immeubles et le logement détaillé)');
   await p.click('#base-btn-filtres');
   // Bilan : 31 portes (30 + 1 passage du logement), tournée : 30 portes
   const ch = await p.evaluate(() => Stats.chiffres(Stats.elementsReels()));

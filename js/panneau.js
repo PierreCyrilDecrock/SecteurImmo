@@ -216,6 +216,8 @@ var Panneau = (function () {
     if (nDonnees) info.push(nDonnees + ' logement' + (nDonnees > 1 ? 's' : '') + ' selon l\'IGN');
     var etg = TypesBati.etagesDe(id); if (etg) info.push(etg + ' étage' + (etg > 1 ? 's' : ''));
     if (info.length) s.appendChild(el('p', 'aide-champ', info.join(' · ')));
+    var f = DataImmo.batiment(id), adrs = f ? DataImmo.adresses(f.properties) : [];
+    if (adrs.length > 1) { var pa = el('p', 'aide-champ', 'Adresses : ' + adrs.join(' · ')); pa.id = 'fiche-adresses'; s.appendChild(pa); }
     return s;
   }
 

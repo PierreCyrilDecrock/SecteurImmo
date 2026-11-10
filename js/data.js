@@ -96,8 +96,8 @@ var DataImmo = (function () {
   var COUCHES = {
     bat: { nom: 'BDTOPO_V3:batiment', geo: 'geometrie', tri: 'cleabs',
       champs: 'cleabs,usage_1,usage_2,nombre_de_logements,nombre_d_etages,construction_legere,etat_de_l_objet,geometrie' },
-    adr: { nom: 'BAN-PLUS:adresse', geo: 'geom', tri: 'id', champs: 'id_adr,numero,rep,nom_voie' },
-    lien: { nom: 'BAN-PLUS:lien_adresse_bati', geo: 'geom', tri: 'id_adr', champs: 'id_adr,id_bat' }
+    adr: { nom: 'BAN-PLUS:adresse', geo: 'geom', tri: 'id', champs: 'id_adr,numero,rep,nom_voie,geom' },
+    lien: { nom: 'BAN-PLUS:lien_adresse_bati', geo: 'geom', tri: 'id_adr', champs: 'id_adr,id_bat,nb_adr,nb_bat' }
   };
 
   function wkt(poly) {   // [[lat, lon]…] -> POLYGON((lon lat, …)) fermé
@@ -210,35 +210,94 @@ var DataImmo = (function () {
     return { nouveaux: integrer(fs), recus: (json.features || []).length };
   }
 
-  // Libellé d'une adresse BAN : « 11 bis Rue Galilée »
-  function libelleAdresse(p) {
-    var rep = p.rep ? ' ' + String(p.rep).toLowerCase() : '';
-    return ((p.numero ? p.numero + rep + ' ' : '') + (p.nom_voie || '')).trim();
-  }
-  // Page d'adresses -> { id_adr: { n: '11 bis', v: 'Rue Galilée' } } (ajoutées à `table`)
+  /*
+   * Adresses (BAN-PLUS) et rattachement aux bâtiments.
+   * Les liens adresse -> bâtiment de l'IGN sont souvent faits par la parcelle cadastrale : dans une
+   * résidence (une parcelle, plusieurs bâtiments, plusieurs entrées), chaque adresse est reliée à chaque
+   * bâtiment. Chaque adresse ayant un point d'entrée, on ne garde alors pour un bâtiment que les adresses
+   * dont l'entrée le touche (5 m au plus), à défaut la plus proche ; les adresses sont classées par distance.
+   */
+  var TOUCHE_M = 5;
+
+  // Page d'adresses -> table { id_adr: { n: '11 bis', v: 'Rue Galilée', p: [lon, lat] } }
   function lireAdresses(json, table) {
     (json.features || []).forEach(function (f) {
       var p = f.properties || {};
       if (!p.id_adr || !p.nom_voie) return;
-      table[p.id_adr] = { n: p.numero ? p.numero + (p.rep ? ' ' + String(p.rep).toLowerCase() : '') : '', v: p.nom_voie };
+      var e = { n: p.numero ? p.numero + (p.rep ? ' ' + String(p.rep).toLowerCase() : '') : '', v: p.nom_voie };
+      var c = f.geometry && f.geometry.type === 'Point' ? f.geometry.coordinates : null;
+      if (c) e.p = [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6];
+      table[p.id_adr] = e;
     });
   }
-  // Page de liens adresse -> bâtiment : complète les bâtiments connus ; renvoie ceux qui ont changé
-  function lierAdresses(json, table) {
-    var modifies = {};
-    (json.features || []).forEach(function (f) {
-      var p = f.properties || {}, a = table[p.id_adr];
-      if (!a || !p.id_bat) return;
-      var b = batiments[idIgn(p.id_bat)];
-      if (!b) return;
-      var pr = b.properties, lib = (a.n ? a.n + ' ' : '') + a.v;
-      pr.adr = pr.adr || [];
-      if (pr.adr.indexOf(lib) >= 0) return;
-      pr.adr.push(lib);
-      if (pr.adr.length === 1) { pr['addr:street'] = a.v; if (a.n) pr['addr:housenumber'] = a.n; }
-      modifies[b.id] = b;
+
+  // Distance en mètres d'un point [lon, lat] au contour d'un bâtiment (0 si le point est dedans)
+  function distanceBatiment(pt, f) {
+    var g = f.geometry, rings = g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map(function (x) { return x[0]; });
+    var lon = pt[0], lat = pt[1], kx = 111320 * Math.cos(lat * Math.PI / 180), ky = 110540, best = Infinity;
+    rings.forEach(function (r) {
+      if (dansPolygone(lat, lon, r.map(function (q) { return [q[1], q[0]]; }))) { best = 0; return; }
+      for (var i = 0; i < r.length - 1; i++) {
+        var ax = (r[i][0] - lon) * kx, ay = (r[i][1] - lat) * ky, bx = (r[i + 1][0] - lon) * kx, by = (r[i + 1][1] - lat) * ky;
+        var dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l)) : 0;
+        best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+      }
     });
-    return Object.keys(modifies).map(function (k) { return modifies[k]; });
+    return best;
+  }
+
+  // Ordre naturel des numéros (2 avant 10, 3 avant 3 bis)
+  function numero(n) { var m = /^(\d+)\s*(.*)$/.exec(n || ''); return m ? [+m[1], m[2]] : [Infinity, n || '']; }
+
+  // Adresses retenues pour un bâtiment, à partir de ses liens [[id_adr, ambigu]]
+  function choisirAdresses(f, liens, table) {
+    var cands = [];
+    liens.forEach(function (l) {
+      var a = table[l[0]]; if (!a) return;
+      cands.push({ a: a, sur: !l[1], d: a.p ? distanceBatiment(a.p, f) : (l[1] ? Infinity : 0) });
+    });
+    if (!cands.length) return null;
+    var gardees = cands.filter(function (c) { return c.sur || c.d <= TOUCHE_M; });
+    if (!gardees.length) gardees = [cands.reduce(function (m, c) { return c.d < m.d ? c : m; })];
+    gardees.sort(function (x, y) {
+      var dx = x.sur ? 0 : x.d, dy = y.sur ? 0 : y.d;
+      if (Math.abs(dx - dy) > 0.5) return dx - dy;
+      if (x.a.v !== y.a.v) return x.a.v < y.a.v ? -1 : 1;
+      var nx = numero(x.a.n), ny = numero(y.a.n);
+      return nx[0] - ny[0] || (nx[1] < ny[1] ? -1 : nx[1] > ny[1] ? 1 : 0);
+    });
+    var vus = {}, res = [];
+    gardees.forEach(function (c) { var k = c.a.n + '|' + c.a.v; if (!vus[k]) { vus[k] = 1; res.push(c.a); } });
+    return res;
+  }
+
+  /*
+   * Page de liens adresse -> bâtiment : les liens sont cumulés dans `liens` ({ bâtiment: [[id_adr, ambigu]] },
+   * gardé par la tâche) et les adresses des bâtiments concernés recalculées (elles remplacent les anciennes).
+   * Renvoie les bâtiments modifiés.
+   */
+  function lierAdresses(json, table, liens) {
+    var touches = {};
+    (json.features || []).forEach(function (f) {
+      var p = f.properties || {};
+      if (!p.id_adr || !p.id_bat || !table[p.id_adr]) return;
+      var id = idIgn(p.id_bat);
+      if (!batiments[id]) return;
+      (liens[id] = liens[id] || []).push([p.id_adr, (p.nb_bat > 1 && p.nb_adr > 1) ? 1 : 0]);
+      touches[id] = true;
+    });
+    var modifies = [];
+    Object.keys(touches).forEach(function (id) {
+      var b = batiments[id], adr = choisirAdresses(b, liens[id], table);
+      if (!adr || !adr.length) return;
+      var pr = b.properties, libs = adr.map(function (a) { return (a.n ? a.n + ' ' : '') + a.v; });
+      if (pr.adr && pr.adr.join('|') === libs.join('|')) return;
+      pr.adr = libs;
+      pr['addr:street'] = adr[0].v;
+      if (adr[0].n) pr['addr:housenumber'] = adr[0].n; else delete pr['addr:housenumber'];
+      modifies.push(b);
+    });
+    return modifies;
   }
 
   // ---------- Secours OpenStreetMap (Overpass) ----------
@@ -301,8 +360,19 @@ var DataImmo = (function () {
 
   // ---------- Libellés ----------
 
+  // Adresse affichée : les numéros d'une même rue sont regroupés (« 2, 3 Rue Colonel Sebbane »),
+  // les autres rues signalées par (+n)
   function adresse(props) {
-    if (props.adr && props.adr.length) return props.adr[0] + (props.adr.length > 1 ? ' (+' + (props.adr.length - 1) + ')' : '');
+    if (props.adr && props.adr.length) {
+      var rue = props['addr:street'], nums = [], autres = 0;
+      props.adr.forEach(function (l) {
+        if (rue && l.slice(-rue.length) === rue && l.length > rue.length) nums.push(l.slice(0, l.length - rue.length).trim());
+        else if (rue && l === rue) nums.push('');
+        else autres++;
+      });
+      var t = nums.length ? (nums.filter(Boolean).join(', ') + ' ' + rue).trim() : props.adr[0];
+      return t + (autres && nums.length ? ' (+' + autres + ')' : (!nums.length && props.adr.length > 1 ? ' (+' + (props.adr.length - 1) + ')' : ''));
+    }
     var rue = props['addr:street'], num = props['addr:housenumber'];
     if (!rue && !num) return '';
     return [num, rue].filter(Boolean).join(' ');
@@ -314,7 +384,7 @@ var DataImmo = (function () {
     urlIgn: urlIgn, tenter: tenter, integrerIgn: integrerIgn, lireAdresses: lireAdresses, lierAdresses: lierAdresses,
     urlOsm: urlOsm, corpsOsm: corpsOsm, integrerOsm: integrerOsm,
     correspondancesOsm: correspondancesOsm, estIgn: estIgn, estOsm: estOsm, centreDe: centreDe,
-    adresse: adresse, typeBatiment: typeBatiment,
+    adresse: adresse, adresses: function (props) { return props.adr ? props.adr.slice() : []; }, typeBatiment: typeBatiment,
     estCharge: function (bounds) { return dejaCharge(boite(bounds)); },
     ajouterZone: ajouterZone,
     restaurer: function (features, zonesSauvees) {

@@ -36,10 +36,21 @@ function versIgn(els) {
     bat.push({ type: 'Feature', id: 'batiment.' + x.id, geometry: { type: 'MultiPolygon', coordinates: [[x.geometry.map(g => [g.lon, g.lat, 12])]] }, properties: p, c: x.geometry[0] });
     if (t['addr:street']) {
       const ia = '44999_' + x.id;
-      adr.push({ type: 'Feature', id: 'adresse.' + x.id, geometry: null, properties: { id_adr: ia, numero: +t['addr:housenumber'] || null, rep: null, nom_voie: t['addr:street'], insee_com: '44999' }, c: x.geometry[0] });
-      lien.push({ type: 'Feature', id: 'lien.' + x.id, geometry: null, properties: { id_adr: ia, id_bat: p.cleabs }, c: x.geometry[0] });
+      // Point d'entrée : au milieu du côté sud du bâtiment
+      const g = x.geometry, pt = [(g[0].lon + g[1].lon) / 2, g[0].lat];
+      adr.push({ type: 'Feature', id: 'adresse.' + x.id, geometry: { type: 'Point', coordinates: pt }, properties: { id_adr: ia, numero: +t['addr:housenumber'] || null, rep: t['test:rep'] || null, nom_voie: t['addr:street'], insee_com: '44999' }, c: x.geometry[0], parcelle: t['test:parcelle'] });
+      if (!t['test:parcelle']) lien.push({ type: 'Feature', id: 'lien.' + x.id, geometry: null, properties: { id_adr: ia, id_bat: p.cleabs, nb_adr: 1, nb_bat: 1 }, c: x.geometry[0] });
     }
   });
+  // Parcelle partagée (« test:parcelle ») : comme l'IGN, chaque adresse est reliée à chaque bâtiment de la parcelle
+  const parcelles = {};
+  els.forEach(x => { const k = (x.tags || {})['test:parcelle']; if (k) (parcelles[k] = parcelles[k] || []).push(x); });
+  Object.keys(parcelles).forEach(k => {
+    const bs = parcelles[k], as = adr.filter(a => a.parcelle === k);
+    as.forEach(a => bs.forEach(x => lien.push({ type: 'Feature', id: 'lien.' + a.properties.id_adr + '.' + x.id, geometry: null,
+      properties: { id_adr: a.properties.id_adr, id_bat: 'BATIMENT' + String(x.id).padStart(16, '0'), nb_adr: as.length, nb_bat: bs.length }, c: a.c })));
+  });
+  adr.forEach(a => { delete a.parcelle; });
   return { 'BDTOPO_V3:batiment': bat, 'BAN-PLUS:adresse': adr, 'BAN-PLUS:lien_adresse_bati': lien };
 }
 function dansPoly(lat, lon, poly) {
