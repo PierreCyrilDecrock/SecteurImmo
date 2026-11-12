@@ -13,11 +13,12 @@ Application web **100 % HTML / CSS / JavaScript** : pas de serveur, pas de base 
 5. [Base des maisons](#base-des-maisons)
 6. [Secteurs, rappels, bilan](#secteurs-rappels-bilan)
 7. [Sur le terrain (téléphone)](#sur-le-terrain-téléphone)
-8. [Sauvegarde, export, import](#sauvegarde-export-import)
-9. [Publier sur GitHub Pages](#publier-sur-github-pages-facultatif)
-10. [Limites à connaître](#limites-à-connaître)
-11. [FAQ](#faq)
-12. [Pour les développeurs](#pour-les-développeurs)
+8. [Synchroniser ordinateur et téléphone](#synchroniser-ordinateur-et-téléphone)
+9. [Sauvegarde, export, import](#sauvegarde-export-import)
+10. [Publier sur GitHub Pages](#publier-sur-github-pages-facultatif)
+11. [Limites à connaître](#limites-à-connaître)
+12. [FAQ](#faq)
+13. [Pour les développeurs](#pour-les-développeurs)
 
 ## Démarrage rapide
 
@@ -82,6 +83,21 @@ Chaque bâtiment reçoit un type, déduit de l'IGN : **maison**, **immeuble** (2
 - **Logements détaillés** : *Ajouter un logement* (« Apt 12 », « 2e gauche »…) ; chacun a sa propre fiche (statut, contact, qualification, note, historique, étiquettes) et reprend au départ le statut de l'immeuble. Il apparaît dans les **Rappels**, la **Base** (colonne *Logement*, filtre *Logements détaillés*), le journal du bilan et la recherche.
 - **Accès** : digicode, interphone, gardien, boîtes aux lettres accessibles ou fermées, syndic.
 - Sur la carte (zoom de rue), une pastille indique les **logements faits / logements** de chaque immeuble ; le statut affiché est le plus avancé de ses logements.
+
+### DPE et ventes (DVF)
+
+À chaque téléchargement, deux sources publiques complètent les bâtiments :
+- **DPE** (diagnostics de performance énergétique des logements depuis juillet 2021, ADEME, `data.ademe.fr`) : étiquette énergie (A → G) et GES, date, surface, type (maison / appartement), période de construction, précision du logement (« Étage 3 ») ;
+- **Ventes DVF** (Demandes de valeurs foncières depuis 2021, Etalab, API de l'application officielle `app.dvf.etalab.gouv.fr`) : date, prix, type, surface, pièces, prix au m².
+
+Rattachement d'un DPE à un bâtiment, du plus sûr au moins sûr : identifiant **RNB** (Référentiel national des bâtiments, commun au DPE et à la BD TOPO, présent sur environ un DPE sur deux), identifiant de l'adresse BAN, numéro et rue, puis position de l'adresse sur le bâtiment (15 m au plus). Un bâtiment sans adresse BAN prend celle de son DPE. Une vente est rattachée par sa **parcelle cadastrale** ; si la parcelle porte plusieurs bâtiments (résidence), par l'adresse de la vente, sinon à chacun, avec la mention « sur la parcelle ».
+
+Où les voir :
+- **Fiche** : étiquette DPE dans l'en-tête ; sections *Énergie (DPE)* (répartition des étiquettes pour un immeuble, alerte **passoire thermique** F ou G : location interdite pour les G depuis 2025, pour les F en 2028) et *Ventes depuis 2021* ;
+- **Légende** (filtre de la carte) : *Passoires : DPE F ou G*, *DPE E*, *DPE A à D*, *Sans DPE*, *Vendu il y a moins de 2 ans*, *Vendu depuis 2021*, *Pas de vente* ;
+- **Base** : colonnes *DPE*, *Nb de DPE*, *Construction*, *Dernière vente*, *Prix de vente*, *Prix au m²*, *Ventes* ; filtres par étiquette DPE et par vente.
+
+Ces deux étapes ne bloquent jamais le téléchargement : si un service ne répond pas, les bâtiments sont gardés et un avertissement invite à relancer *Mettre à jour*. Ordre de grandeur : une commune moyenne compte quelques milliers de DPE (une requête) et quelques dizaines de sections cadastrales (une requête chacune).
 
 ### Vue éloignée
 
@@ -193,6 +209,19 @@ La date retenue pour une maison dans l'activité est celle de son **dernier chan
 - **Ma position** (bouton viseur à droite) : point bleu suivi en direct ; déplacez la carte pour arrêter le recentrage, retouchez pour recentrer, touchez pendant le suivi pour arrêter. L'écran reste allumé pendant le suivi si le navigateur le permet. La position n'est ni enregistrée ni envoyée (elle exige `localhost` ou `https://`).
 - **Installer l'application** : menu du navigateur → « Installer » / « Ajouter à l'écran d'accueil » (un bouton apparaît aussi dans l'Aide quand le navigateur le propose). Elle démarre ensuite **sans connexion**, avec vos données ; seuls le fond de carte et le chargement de nouvelles maisons demandent du réseau. Les tuiles de carte ne sont jamais mises en cache (règle d'OpenStreetMap).
 
+## Synchroniser ordinateur et téléphone
+
+*Données → Synchroniser (Ordinateur ↔ téléphone)* : échange **direct** entre deux appareils, chiffré, **sans serveur** (WebRTC). Les deux appareils s'identifient par QR code :
+1. sur le premier, *Afficher mon code* ;
+2. sur le second, *Scanner un code* : il lit le QR code puis affiche sa **réponse** ;
+3. le premier scanne cette réponse (avec sa webcam) : la connexion s'établit, chacun envoie ses données à l'autre.
+
+Chaque fiche porte la date de sa dernière modification : pour une même maison, **la version la plus récente gagne** ; une fiche effacée sur un appareil l'est aussi sur l'autre (traces de suppression gardées 180 jours). Sont échangés : fiches et logements, points ajoutés, adresses trouvées, secteurs (créations, renommages, suppressions), étiquettes, tournées, communes, et **les bâtiments qui manquent** à l'autre appareil (avec leurs adresses, DPE et ventes). Les préférences (thème, objectif, types affichés) restent propres à chaque appareil.
+
+- Les deux appareils doivent être **sur le même réseau Wi-Fi** de préférence ; un serveur public (STUN de Google) sert seulement à trouver l'adresse réseau, aucune donnée n'y passe.
+- **Sans caméra** : *Copier le code* sur un appareil, envoyez-le-vous (message, e-mail), puis *Coller un code* sur l'autre.
+- Lecture des QR codes : lecteur intégré du navigateur quand il existe, sinon la bibliothèque jsQR (chargée seulement à ce moment-là).
+
 ## Sauvegarde, export, import
 
 Panneau **Données** :
@@ -222,7 +251,8 @@ Pratique pour installer l'application sur téléphone en `https://`. Le workflow
 - **Clavier / lecteur d'écran** : les maisons sont dessinées sur un canevas et ne sont pas atteignables une à une au clavier ; utilisez la recherche (`Ctrl K`, par nom ou adresse), **Secteurs → Suivante** ou **Bilan → Journal**, qui ouvrent la fiche.
 - **Performance** : testé avec 40 000 bâtiments (seuls ceux de la vue sont dessinés, carte d'avancement en vue éloignée). Les icônes de statut ne sont dessinées qu'à fort zoom, pour la zone visible, et sont omises quand plus de 350 maisons cochées sont à l'écran (les couleurs et contours restent). Les scripts sont chargés en parallèle (`defer`), les bibliothèques servies depuis le cache, et le flou des panneaux est suspendu pendant les déplacements de la carte.
 - **Meilleurs créneaux** : calculés sur vos propres passages ; avec peu de données, les pourcentages varient beaucoup (les cases de moins de 3 portes sont grisées, le « meilleur créneau » demande au moins 5 portes).
-- **Vérifications** : le téléchargement d'une commune a été vérifié avec les vrais services de l'IGN et de l'API géographique (pages de 5 000, CORS, champs) ; les tests automatiques utilisent des réponses simulées. Restent non vérifiés en conditions réelles : les tuiles et le géocodage inverse (`distance`), le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
+- **Vérifications** : le téléchargement d'une commune (IGN, API géographique, DPE de l'ADEME, ventes DVF) a été vérifié avec les vrais services ; les tests automatiques utilisent des réponses simulées. La synchronisation a été testée entre deux navigateurs sur la même machine ; **pas encore entre un vrai téléphone et un ordinateur** (caméras, Wi-Fi).
+- **DVF** : l'API utilisée est celle de l'application officielle « Explorer les données de valeurs foncières » ; elle n'est pas documentée comme API publique et pourrait changer. Les ventes couvrent 2021 à aujourd'hui (pas l'Alsace-Moselle ni Mayotte, absentes de DVF). Restent non vérifiés en conditions réelles : les tuiles et le géocodage inverse (`distance`), le fichier lié (API *File System Access*), l'installation sur un vrai téléphone, le GPS matériel et le workflow GitHub Pages.
 
 ## FAQ
 
@@ -234,7 +264,7 @@ Pratique pour installer l'application sur téléphone en `https://`. Le workflow
 
 **Je ne vois pas les garages / entreprises.** Ils sont masqués par défaut : cochez leur type dans la légende (*Bâtiments affichés*).
 
-**Comment passer de l'ordinateur au téléphone ?** Données → Sauvegarde complète, transférez le fichier, puis Données → Importer sur l'autre appareil.
+**Comment passer de l'ordinateur au téléphone ?** Données → Synchroniser : un QR code sur chaque appareil, et les deux ont les mêmes données. Sinon : Données → Sauvegarde complète, transférez le fichier, puis Données → Importer sur l'autre appareil.
 
 **La localisation ne marche pas.** Autorisez-la pour le site dans les réglages du navigateur ; elle exige `localhost` ou `https://`.
 
@@ -245,23 +275,24 @@ Aucun build, aucun npm pour l'application : des scripts classiques (pas de modul
 ```
 index.html  manifest.json  sw.js  lancer.bat  lancer.sh
 css/   tokens (thèmes, police) · composants · coquille (navigation, panneaux) · carte · panneaux · tableau · tournees · base · donnees-terrain
-js/    pwa · theme · ui · notifications · geocode · types · data · statuts · etiquettes · map · telechargements · coquille · carte-ui
-       telechargements-ui · etiquettes-ui · panneau · communes · communes-ui
+js/    pwa · theme · ui · notifications · geocode · types · data · enrichissement · statuts · etiquettes · map · telechargements · coquille · carte-ui
+       telechargements-ui · etiquettes-ui · panneau · communes · communes-ui · synchro · synchro-ui
        position · secteurs · secteurs-ui · rappels-ui · stats · stats-ui · tournees · defis · celebration · progression
        tournees-ui · base · outils · palette · store · echange · aide · app
 vendor/ leaflet 1.9.4 (BSD-2) · lucide (icônes, ISC, sous-ensemble en sprite SVG) · inter (police variable, SIL OFL)
+        qrcode-generator 1.4.4 (MIT) · jsQR 1.4.0 (Apache-2.0)
 icons/  icônes de l'application installée
 tests/  tests de bout en bout (Playwright) – non publiés
 ```
 
-- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `types.js` (types de bâtiments, logements) · `data.js` (IGN BD TOPO et BAN-PLUS, secours Overpass, conversion, rattachement des adresses) · `telechargements.js` (file de téléchargement : pages, nouveaux essais, reprise) · `communes.js` (geo.api.gouv.fr, contours) · `secteurs.js` · `stats.js` (calculs) · `tournees.js` (tournées : passages, pauses, distance) · `defis.js` (records, badges, défis, expérience, tous dérivés des données) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
-- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende, types affichés) · `map.js` (dessin des seuls bâtiments visibles, index en grille, carte d'avancement) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche : maison, immeuble, logement) · `telechargements-ui.js` (carte de progression) · `communes-ui.js` (recherche et liste des communes) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `tournees-ui.js` (pilule, bilan de fin, vue Tournées) · `progression.js` + `celebration.js` (succès célébrés une fois, confettis) · `base.js` (tableau virtualisé, tris, filtres, colonnes, vues) · `notifications.js` · `theme.js`.
+- **Modèle** : `statuts.js` (statuts, qualification, fiches, historique, annulation) · `etiquettes.js` · `types.js` (types de bâtiments, logements) · `data.js` (IGN BD TOPO et BAN-PLUS, secours Overpass, conversion, rattachement des adresses) · `telechargements.js` (file de téléchargement : pages, nouveaux essais, reprise) · `communes.js` (geo.api.gouv.fr, contours) · `enrichissement.js` (DPE de l'ADEME, ventes DVF, rattachement aux bâtiments) · `synchro.js` (WebRTC, signalisation par QR code, fusion entre appareils) · `secteurs.js` · `stats.js` (calculs) · `tournees.js` (tournées : passages, pauses, distance) · `defis.js` (records, badges, défis, expérience, tous dérivés des données) · `store.js` (IndexedDB, schéma versionné, `migrer()`) · `echange.js` (export, import, CSV, fichier lié).
+- **Interface** : `coquille.js` (navigation, tiroir, fiche, feuilles glissantes) · `carte-ui.js` (fonds, zoom, chargement, légende, types affichés) · `map.js` (dessin des seuls bâtiments visibles, index en grille, carte d'avancement) · `outils.js` (dock, modes, raccourcis) · `panneau.js` (fiche : maison, immeuble, logement) · `telechargements-ui.js` (carte de progression) · `communes-ui.js` (recherche et liste des communes) · `synchro-ui.js` (QR codes, caméra) · `palette.js` (Ctrl K) · `stats-ui.js` (bilan) · `tournees-ui.js` (pilule, bilan de fin, vue Tournées) · `progression.js` + `celebration.js` (succès célébrés une fois, confettis) · `base.js` (tableau virtualisé, tris, filtres, colonnes, vues) · `notifications.js` · `theme.js`.
 - **Design** : jetons (couleurs, rayons, ombres, mouvements) dans `css/tokens.css`, thème posé sur `<html data-theme>`. Les couleurs des statuts forment une palette catégorielle validée pour les daltoniens (clair et sombre).
 - **Si vous ajoutez ou supprimez un fichier de l'application**, mettez à jour la liste `FICHIERS` de `sw.js` (et changez `VERSION`), ainsi que l'étape de copie du workflow Pages si c'est un nouveau dossier.
 - **Tests** : `node tests/e2e.js` (Playwright doit être installé ; `axe-core` facultatif pour les contrôles d'accessibilité automatiques ; `node tests/e2e.js secteurs` ne lance qu'une rubrique). Les services externes sont simulés par interception réseau : les tests ne dépendent pas d'Internet.
 
 ## Données et vie privée
 
-Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, bâtiments et adresses d'une zone ou d'une commune : IGN `data.geopf.fr`, `geo.api.gouv.fr`, et Overpass en secours). La position GPS n'est jamais envoyée. Les fiches peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports et respectez le RGPD (informez les personnes, ne conservez que le nécessaire).
+Aucune donnée n'est envoyée à un serveur du projet : tout reste dans votre navigateur. Seuls les services de carte et de données reçoivent des requêtes techniques (tuiles, recherche d'adresse, bâtiments et adresses d'une zone ou d'une commune : IGN `data.geopf.fr`, `geo.api.gouv.fr`, ADEME `data.ademe.fr`, DVF `app.dvf.etalab.gouv.fr`, et Overpass en secours). La synchronisation passe directement d'un appareil à l'autre. La position GPS n'est jamais envoyée. Les fiches peuvent contenir des données personnelles (noms, téléphones, notes) : protégez vos exports et respectez le RGPD (informez les personnes, ne conservez que le nécessaire).
 
-Cartes © contributeurs OpenStreetMap, © IGN · Bâtiments : IGN BD TOPO® et BAN-PLUS (Licence Ouverte Etalab 2.0) · Communes : API Découpage administratif (geo.api.gouv.fr) · Icônes [Lucide](https://lucide.dev) (ISC) · Police [Inter](https://rsms.me/inter/) (SIL OFL) · [Leaflet](https://leafletjs.com) (BSD-2).
+Cartes © contributeurs OpenStreetMap, © IGN · Bâtiments : IGN BD TOPO® et BAN-PLUS (Licence Ouverte Etalab 2.0) · Communes : API Découpage administratif (geo.api.gouv.fr) · DPE : ADEME · DVF : DGFiP / Etalab (Licence Ouverte) · QR codes : qrcode-generator (MIT), jsQR (Apache-2.0) · Icônes [Lucide](https://lucide.dev) (ISC) · Police [Inter](https://rsms.me/inter/) (SIL OFL) · [Leaflet](https://leafletjs.com) (BSD-2).

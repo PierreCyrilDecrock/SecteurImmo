@@ -20,7 +20,8 @@ var Telechargements = (function () {
     essaisMax: 6,              // par page
     delaiBaseMs: 2000          // doublé à chaque nouvel essai (30 s au plus)
   };
-  var POIDS = { bat: 0.55, adr: 0.15, lien: 0.30 };   // part de chaque étape dans la progression
+  var POIDS = { bat: 0.4, adr: 0.1, lien: 0.2, dpe: 0.15, dvf: 0.15 };   // part de chaque étape dans la progression
+  var index = {};              // id de tâche -> index des bâtiments (DPE, DVF), reconstruit au début de l'étape
   var HISTORIQUE_MAX = 12;
 
   var taches = [];             // toutes les tâches (les terminées en dernier, quelques-unes gardées)
@@ -44,9 +45,10 @@ var Telechargements = (function () {
     if (deja) { if (deja.etat !== 'en-cours') { deja.etat = 'attente'; deja.erreur = null; deja.essais = 0; } sauver(); signaler(); lancer(); return attente(deja); }
     var t = {
       id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), type: type, nom: nom, ref: ref || null, zone: zone,
-      etapes: [{ couche: 'bat', debut: 0, total: null, fini: false }, { couche: 'adr', debut: 0, total: null, fini: false }, { couche: 'lien', debut: 0, total: null, fini: false }],
+      etapes: [{ couche: 'bat', debut: 0, total: null, fini: false }, { couche: 'adr', debut: 0, total: null, fini: false }, { couche: 'lien', debut: 0, total: null, fini: false },
+        { couche: 'dpe', debut: 0, total: null, fini: false }, { couche: 'dvf', debut: 0, total: null, fini: false }],
       etat: 'attente', erreur: null, message: null, avertissement: null, essais: 0, page: DataImmo.config.page,
-      recus: { bat: 0, nouveaux: 0, adresses: 0, lies: 0, rattaches: 0 }, adresses: {}, liens: {}, cree: Date.now(), source: 'ign'
+      recus: { bat: 0, nouveaux: 0, adresses: 0, lies: 0, rattaches: 0, dpe: 0, ventes: 0 }, adresses: {}, liens: {}, cree: Date.now(), source: 'ign'
     };
     taches.push(t);
     sauver(); signaler(); lancer();
@@ -90,13 +92,16 @@ var Telechargements = (function () {
     if (t.etat !== 'en-cours') { liberer(t); return; }   // mise en pause ou annulée
     var e = t.etapes.filter(function (x) { return !x.fini; })[0];
     if (!e) { terminer(t); return; }
-    DataImmo.tenter(DataImmo.urlIgn(e.couche, t.zone, e.debut, t.page)).then(function (json) {
+    var url;
+    if (e.couche === 'dpe') url = e.suivant || Enrichissement.urlDpe(t.zone);
+    else if (e.couche === 'dvf') {
+      if (!e.sections) { e.sections = Enrichissement.sections(t.zone); e.total = e.sections.length; }
+      if (e.debut >= e.sections.length) { e.fini = true; sauver(); pageSuivante(t); return; }
+      url = Enrichissement.urlDvf(e.sections[e.debut]);
+    } else url = DataImmo.urlIgn(e.couche, t.zone, e.debut, t.page);
+    DataImmo.tenter(url).then(function (json) {
       if (actif !== t) return;
-      var n = (json.features || []).length;
-      if (e.total === null) e.total = typeof json.numberMatched === 'number' ? json.numberMatched : e.debut + n;
-      traiter(t, e.couche, json);
-      e.debut += n;
-      if (!n || e.debut >= e.total) e.fini = true;
+      avancer(t, e, json);
       t.essais = 0; t.message = null;
       sauver(); signaler();
       setTimeout(function () { pageSuivante(t); }, config.pauseMs);
@@ -106,6 +111,8 @@ var Telechargements = (function () {
       t.essais++;
       if (err.expire && t.page > DataImmo.config.pageReduite) t.page = DataImmo.config.pageReduite;
       if (!navigator.onLine) { t.etat = 'attente'; t.message = 'En attente du réseau…'; actif = null; sauver(); signaler(); return; }
+      // Section cadastrale sans vente connue du service : on passe à la suivante
+      if (e.couche === 'dvf' && err.statut === 404) { t.essais = 0; e.debut++; sauver(); setTimeout(function () { pageSuivante(t); }, config.pauseMs); return; }
       if (err.reessayer && t.essais < config.essaisMax) {
         var d = err.attenteMs || Math.min(30000, config.delaiBaseMs * Math.pow(2, t.essais - 1));
         t.message = (err.message || 'Erreur') + ' : nouvel essai ' + t.essais + '/' + (config.essaisMax - 1) + ' dans ' + Math.round(d / 1000) + ' s';
@@ -118,7 +125,37 @@ var Telechargements = (function () {
     });
   }
 
-  // Une page reçue
+  // Une page reçue : traitement et avancement de l'étape
+  function avancer(t, e, json) {
+    if (e.couche === 'dpe') {
+      if (!index[t.id] || !e.debut) index[t.id] = Enrichissement.index();
+      var n = (json.results || []).length;
+      if (e.total === null) e.total = typeof json.total === 'number' ? json.total : n;
+      var r = Enrichissement.traiterDpe(json, index[t.id]);
+      t.recus.dpe += r.rattaches;
+      enregistrer(r.modifies);
+      e.debut += n; e.suivant = json.next || null;
+      if (!n || !json.next) e.fini = true;
+      return;
+    }
+    if (e.couche === 'dvf') {
+      if (!index[t.id] || !e.debut || !index[t.id].parc) index[t.id] = Enrichissement.index();
+      var v = Enrichissement.traiterDvf(json, index[t.id]);
+      t.recus.ventes += v.rattachees;
+      enregistrer(v.modifies);
+      e.debut++;
+      if (e.debut >= e.total) e.fini = true;
+      return;
+    }
+    var nb = (json.features || []).length;
+    if (e.total === null) e.total = typeof json.numberMatched === 'number' ? json.numberMatched : e.debut + nb;
+    traiter(t, e.couche, json);
+    e.debut += nb;
+    if (!nb || e.debut >= e.total) e.fini = true;
+  }
+  function enregistrer(fs) { if (fs.length) { Store.enregistrerBatiments(fs); CarteImmo.signalerModifies(fs.map(function (f) { return f.id; })); } }
+
+  // Une page de la BD TOPO ou de BAN-PLUS
   function traiter(t, couche, json) {
     if (couche === 'bat') {
       var res = DataImmo.integrerIgn(json);
@@ -155,7 +192,7 @@ var Telechargements = (function () {
 
   function terminer(t) {
     t.etat = 'fini'; t.finT = Date.now(); t.message = null;
-    delete t.adresses; delete t.liens;
+    delete t.adresses; delete t.liens; delete index[t.id];
     DataImmo.ajouterZone({ b: t.zone.b, poly: t.zone.poly, src: t.source });
     Store.enregistrerZones(DataImmo.zones());
     elaguer();
@@ -164,10 +201,18 @@ var Telechargements = (function () {
     ecouteursFin.forEach(function (cb) { cb(t); });
     if (p) p.ok(resume(t));
   }
-  function resume(t) { return { dejaCharge: false, nouveaux: t.recus.nouveaux, recus: t.recus.bat, adresses: t.recus.lies, rattaches: t.recus.rattaches, source: t.source, avertissement: t.avertissement, tache: t }; }
+  function resume(t) { return { dejaCharge: false, nouveaux: t.recus.nouveaux, recus: t.recus.bat, adresses: t.recus.lies, rattaches: t.recus.rattaches, dpe: t.recus.dpe || 0, ventes: t.recus.ventes || 0, source: t.source, avertissement: t.avertissement, tache: t }; }
 
   function echec(t, message, couche) {
     // Bâtiments déjà reçus mais adresses impossibles : la tâche est terminée avec un avertissement
+    if (couche === 'dpe' || couche === 'dvf') {
+      // Données d'enrichissement : non bloquantes, on termine (et on garde ce qui est arrivé)
+      t.etapes.forEach(function (e) { if (e.couche === couche) e.fini = true; });
+      t.avertissement = (couche === 'dpe' ? 'Diagnostics énergétiques (DPE)' : 'Ventes (DVF)') + ' incomplets (' + message.toLowerCase() + ') : relancez « Mettre à jour » plus tard.';
+      t.essais = 0;
+      setTimeout(function () { pageSuivante(t); }, config.pauseMs);
+      return;
+    }
     if (couche !== 'bat') {
       t.avertissement = 'Adresses incomplètes (' + message.toLowerCase() + ') : elles seront cherchées à l\'ouverture des fiches.';
       terminer(t); return;

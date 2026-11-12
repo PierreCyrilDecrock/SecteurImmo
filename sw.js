@@ -11,7 +11,7 @@
  */
 'use strict';
 
-var VERSION = 'secteurimmo-v5';   // à changer si des fichiers sont supprimés/renommés
+var VERSION = 'secteurimmo-v6';   // à changer si des fichiers sont supprimés/renommés
 var FICHIERS = [
   './',
   'index.html',
@@ -35,6 +35,7 @@ var FICHIERS = [
   'js/geocode.js',
   'js/types.js',
   'js/data.js',
+  'js/enrichissement.js',
   'js/statuts.js',
   'js/etiquettes.js',
   'js/map.js',
@@ -62,6 +63,8 @@ var FICHIERS = [
   'js/palette.js',
   'js/store.js',
   'js/echange.js',
+  'js/synchro.js',
+  'js/synchro-ui.js',
   'js/aide.js',
   'js/app.js',
   'icons/apple-touch-icon.png',
@@ -76,7 +79,9 @@ var FICHIERS = [
   'vendor/leaflet/images/marker-icon.png',
   'vendor/leaflet/images/marker-shadow.png',
   'vendor/lucide/LICENSE',
-  'vendor/lucide/icons.svg'
+  'vendor/lucide/icons.svg',
+  'vendor/qrcode-generator/qrcode.js',
+  'vendor/jsqr/jsQR.js'
 ];
 var DELAI_RESEAU_MS = 4000;
 

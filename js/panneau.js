@@ -195,6 +195,80 @@ var Panneau = (function () {
     return s;
   }
 
+  // ---------- Données publiques : DPE (ADEME) et ventes (DVF) ----------
+
+  function moisAnnee(d) { if (!d) return ''; var x = new Date(d.slice(0, 10) + 'T12:00'); return x.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }); }
+  function euros(v) { return Ui.nombre(v) + ' €'; }
+  function badgeDpe(e, grand) { var b = el('span', 'badge-dpe' + (grand ? ' grand' : ''), e || '?'); b.dataset.e = e || ''; b.title = e ? 'DPE ' + e : 'DPE'; return b; }
+  function chipDpe(id) {
+    var e = Enrichissement.etiquette(id); if (!e) return null;
+    var c = el('span', 'etiquette-dpe'); c.appendChild(badgeDpe(e)); c.appendChild(document.createTextNode(Enrichissement.dpeDe(id).length > 1 ? 'DPE jusqu\'à ' + e : 'DPE ' + e));
+    return c;
+  }
+  var MAX_LISTE = 5;
+  function listeDepliable(s, items, rendu, quoi) {
+    var ul = el('ul', 'liste-donnees');
+    items.slice(0, MAX_LISTE).forEach(function (x) { ul.appendChild(rendu(x)); });
+    s.appendChild(ul);
+    if (items.length > MAX_LISTE) {
+      var b = Ui.bouton('Voir les ' + items.length + ' ' + quoi, 'btn btn-sm btn-fantome', function () {
+        items.slice(MAX_LISTE).forEach(function (x) { ul.appendChild(rendu(x)); }); b.remove();
+      });
+      s.appendChild(b);
+    }
+  }
+  function blocDpe(id) {
+    var l = Enrichissement.dpeDe(id);
+    if (!l.length) return null;
+    var s = section('Énergie (DPE)', 'thermometer'); s.id = 'fiche-dpe';
+    var pire = Enrichissement.pireEtiquette(id);
+    if (l.length > 1) {
+      var rep = Enrichissement.repartition(id), barre = el('div', 'repartition-dpe');
+      Enrichissement.ETIQUETTES.forEach(function (e) {
+        if (!rep[e]) return;
+        var seg = el('span', null, String(rep[e])); seg.dataset.e = e; seg.style.flexGrow = rep[e]; seg.title = rep[e] + ' DPE ' + e;
+        barre.appendChild(seg);
+      });
+      s.appendChild(el('p', 'aide-champ', l.length + ' diagnostics de logements depuis 2021'));
+      s.appendChild(barre);
+    }
+    if (pire === 'G' || pire === 'F') {
+      var alerte = el('p', 'alerte-dpe');
+      alerte.appendChild(icone('triangle-alert', 'ic-sm'));
+      alerte.appendChild(document.createTextNode(pire === 'G' ? 'Passoire thermique : location interdite depuis 2025 pour un logement classé G.' : 'Passoire thermique : location interdite à partir de 2028 pour un logement classé F.'));
+      s.appendChild(alerte);
+    }
+    listeDepliable(s, l, function (x) {
+      var li = el('li');
+      li.appendChild(badgeDpe(x.e, l.length === 1));
+      var t = el('div', 'txt');
+      t.appendChild(el('strong', null, [x.t ? x.t.charAt(0).toUpperCase() + x.t.slice(1) : 'Logement', x.s ? x.s + ' m²' : '', x.c].filter(Boolean).join(' · ')));
+      t.appendChild(el('span', null, ['DPE du ' + dateCourte(x.d).replace(/ · .*/, ''), x.g ? 'GES ' + x.g : '', x.p ? 'construit ' + x.p : ''].filter(Boolean).join(' · ')));
+      li.appendChild(t);
+      return li;
+    }, 'DPE');
+    s.appendChild(el('p', 'source-donnees', 'Source : ADEME, DPE des logements existants'));
+    return s;
+  }
+  function blocVentes(id) {
+    var l = Enrichissement.ventesDe(id);
+    if (!l.length) return null;
+    var s = section('Ventes depuis 2021 (DVF)', 'trending-up'); s.id = 'fiche-ventes';
+    if (l.some(function (v) { return v.parc; })) s.appendChild(el('p', 'aide-champ', 'Résidence : certaines ventes concernent la parcelle, sans précision du bâtiment.'));
+    listeDepliable(s, l, function (v) {
+      var li = el('li');
+      var prix = el('span', 'prix-vente num', euros(v.v)); li.appendChild(prix);
+      var t = el('div', 'txt');
+      t.appendChild(el('strong', null, [v.t, v.s ? v.s + ' m²' : '', v.p ? v.p + ' p.' : ''].filter(Boolean).join(' · ')));
+      var m2 = v.s && v.v && !/^\d/.test(v.t) ? Math.round(v.v / v.s) : null;
+      t.appendChild(el('span', null, [moisAnnee(v.d), m2 ? Ui.nombre(m2) + ' €/m²' : '', v.n && v.n !== 'Vente' ? v.n : '', v.parc ? 'sur la parcelle' : ''].filter(Boolean).join(' · ')));
+      li.appendChild(t);
+      return li;
+    }, 'ventes');
+    s.appendChild(el('p', 'source-donnees', 'Source : DVF (Demandes de valeurs foncières), Etalab'));
+    return s;
+  }
+
   // Bâtiment : type (corrigeable) et nombre de logements
   function blocBatiment(id, rec, manuel) {
     var s = section('Bâtiment', 'building');
@@ -333,6 +407,7 @@ var Panneau = (function () {
     if (secteurs.length) sous.push(secteurs.map(function (s) { return s.nom; }).join(', '));
     var chips = [Ui.etiquetteStatut(Statuts.parId(multi ? Statuts.statutAffiche(id) : Statuts.statutDe(id)))];
     if (chipPotentiel(rec)) chips.push(chipPotentiel(rec));
+    if (chipDpe(id)) chips.push(chipDpe(id));
     var tete = enTete(chips, h, sous.join(' · '));
 
     var corps = el('div', 'fiche-corps');
@@ -350,6 +425,7 @@ var Panneau = (function () {
       if (Statuts.statutDe(id) !== 'aucun') corps.appendChild(blocPassage(id, rec));
       if (rec.nom || rec.tel) corps.appendChild(blocContact(id, rec));
       corps.appendChild(blocNote(id, rec, 'Accès, horaires du gardien, remarques…'));
+      [blocDpe(id), blocVentes(id)].forEach(function (b) { if (b) corps.appendChild(b); });
       corps.appendChild(blocBatiment(id, rec, manuel));
     } else {
       var s1 = section('Statut', 'flag'); s1.appendChild(grilleStatuts(id)); corps.appendChild(s1);
@@ -358,6 +434,7 @@ var Panneau = (function () {
       corps.appendChild(blocContact(id, rec));
       corps.appendChild(blocQualif(id, rec));
       corps.appendChild(blocNote(id, rec));
+      [blocDpe(id), blocVentes(id)].forEach(function (b) { if (b) corps.appendChild(b); });
       corps.appendChild(blocBatiment(id, rec, manuel));
     }
     var hist = blocHistorique(rec); if (hist) corps.appendChild(hist);

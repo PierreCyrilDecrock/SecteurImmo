@@ -66,8 +66,8 @@ var Store = (function () {
     return ouvrir().then(function (ok) {
       if (!ok) return null;
       return Promise.all([lireTout('records'), lireTout('manuels'), lireTout('adresses'), lireTout('batiments'),
-                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes'), lireCle('tournees'), lireCle('progression'), lireCle('base'), lireCle('telechargements'), lireCle('communes'), lireCle('types')]).then(function (r) {
-        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null, tournees: r[11] || null, progression: r[12] || null, base: r[13] || null, telechargements: r[14] || [], communes: r[15] || [], types: r[16] || null };
+                          lireCle('zones'), lireCle('prefs'), lireCle('meta'), lireCle('fichierLie'), lireCle('secteurs'), lireCle('objectif'), lireCle('etiquettes'), lireCle('tournees'), lireCle('progression'), lireCle('base'), lireCle('telechargements'), lireCle('communes'), lireCle('types'), lireCle('supprimes')]).then(function (r) {
+        var d = { records: {}, manuels: {}, adresses: {}, batiments: r[3], zones: r[4] || [], prefs: r[5] || null, meta: r[6] || { schema: SCHEMA }, fichierLie: r[7] || null, secteurs: r[8] || { secteurs: [], options: {} }, objectif: r[9] || null, etiquettes: r[10] || null, tournees: r[11] || null, progression: r[12] || null, base: r[13] || null, telechargements: r[14] || [], communes: r[15] || [], types: r[16] || null, supprimes: r[17] || {} };
         r[0].forEach(function (x) { var id = x.id; delete x.id; d.records[id] = x; });
         r[1].forEach(function (x) { d.manuels[x.id] = { lat: x.lat, lon: x.lon }; });
         r[2].forEach(function (x) { d.adresses[x.id] = x.label; });
@@ -134,6 +134,7 @@ var Store = (function () {
   // À appeler après la restauration : enregistre ensuite chaque modification
   function demarrer() {
     Statuts.surDonnees(function (type, ids) {
+      if (type === 'supprimes') { planifier('kv', 'supprimes', Object.assign({}, Statuts.supprimes())); return; }
       ids.forEach(function (id) {
         if (type === 'records') { var r = Statuts.get(id); planifier('records', id, r ? Object.assign({ id: id }, r) : null); }
         else if (type === 'manuels') { var m = Statuts.manuels()[id]; planifier('manuels', id, m ? { id: id, lat: m.lat, lon: m.lon } : null); }

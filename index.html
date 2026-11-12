@@ -188,6 +188,9 @@
             </div>
             <div class="chiffres-donnees" id="chiffres-donnees"></div>
 
+            <h3 class="etiquette" style="margin-top:6px">Synchroniser</h3>
+            <button type="button" class="ligne-action" id="btn-synchro"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#qr-code"/></svg></span><span class="txt"><strong>Ordinateur ↔ téléphone</strong><span id="synchro-derniere">Échange direct par QR code, sans serveur</span></span><svg class="ic"><use href="vendor/lucide/icons.svg#arrow-left-right"/></svg></button>
+
             <h3 class="etiquette" style="margin-top:6px">Exporter</h3>
             <button type="button" class="ligne-action" id="btn-export-json"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#file-json"/></svg></span><span class="txt"><strong>Sauvegarde complète</strong><span>Fichier JSON, à réimporter sur un autre appareil</span></span><svg class="ic"><use href="vendor/lucide/icons.svg#download"/></svg></button>
             <button type="button" class="ligne-action" id="btn-export-csv"><span class="medaillon-modale"><svg class="ic"><use href="vendor/lucide/icons.svg#file-spreadsheet"/></svg></span><span class="txt"><strong>Tableur (CSV)</strong><span>S'ouvre directement dans Excel</span></span><svg class="ic"><use href="vendor/lucide/icons.svg#download"/></svg></button>
@@ -236,6 +239,8 @@
               <li><strong>Immeubles</strong> : un geste marque tous les logements (prospectus dans toutes les boîtes) ; chaque logement compte pour une porte. <em>Ajoutez un logement</em> pour suivre une personne (statut, contact, rappel) ; notez le digicode, l'interphone, le gardien.</li>
               <li><strong>Vue éloignée</strong> : la carte montre l'avancement par carreaux (vert = logements faits) ; zoomez pour voir les bâtiments.</li>
               <li><strong>Téléchargements</strong> : en cas de coupure ou de fermeture, ils reprennent là où ils s'étaient arrêtés ; <em>Pause</em> et <em>Annuler</em> dans la carte de progression.</li>
+              <li><strong>DPE et ventes</strong> : la fiche montre l'étiquette énergie des logements (ADEME) et les ventes depuis 2021 (DVF) ; filtrez les passoires F/G ou les biens vendus dans la légende et la Base.</li>
+              <li><strong>Ordinateur ↔ téléphone</strong> : <em>Données → Synchroniser</em>. Un appareil affiche son QR code, l'autre le scanne et affiche sa réponse, que le premier scanne. Même Wi-Fi conseillé.</li>
             </ul>
           </div>
           <div class="aide-section">
@@ -321,6 +326,7 @@
 <dialog class="modale" id="dlg-etiquettes" aria-labelledby="dlg-etiquettes-titre"></dialog>
 <!-- Bienvenue -->
 <dialog class="modale" id="dlg-bienvenue" aria-label="Bienvenue"></dialog>
+<dialog class="modale" id="dlg-synchro" aria-labelledby="dlg-synchro-titre"></dialog>
 
 <!-- Scripts classiques (pas de modules ES) : l'ordre compte ; « defer » = téléchargés en parallèle, exécutés dans l'ordre après l'analyse de la page -->
 <script src="vendor/leaflet/leaflet.js" defer></script>
@@ -331,6 +337,7 @@
 <script src="js/geocode.js" defer></script>
 <script src="js/types.js" defer></script>
 <script src="js/data.js" defer></script>
+<script src="js/enrichissement.js" defer></script>
 <script src="js/statuts.js" defer></script>
 <script src="js/etiquettes.js" defer></script>
 <script src="js/map.js" defer></script>
@@ -358,6 +365,8 @@
 <script src="js/palette.js" defer></script>
 <script src="js/store.js" defer></script>
 <script src="js/echange.js" defer></script>
+<script src="js/synchro.js" defer></script>
+<script src="js/synchro-ui.js" defer></script>
 <script src="js/aide.js" defer></script>
 <script src="js/app.js" defer></script>
 </body>

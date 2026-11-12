@@ -95,9 +95,9 @@ var DataImmo = (function () {
 
   var COUCHES = {
     bat: { nom: 'BDTOPO_V3:batiment', geo: 'geometrie', tri: 'cleabs',
-      champs: 'cleabs,usage_1,usage_2,nombre_de_logements,nombre_d_etages,construction_legere,etat_de_l_objet,geometrie' },
+      champs: 'cleabs,usage_1,usage_2,nombre_de_logements,nombre_d_etages,construction_legere,etat_de_l_objet,identifiants_rnb,geometrie' },
     adr: { nom: 'BAN-PLUS:adresse', geo: 'geom', tri: 'id', champs: 'id_adr,numero,rep,nom_voie,geom' },
-    lien: { nom: 'BAN-PLUS:lien_adresse_bati', geo: 'geom', tri: 'id_adr', champs: 'id_adr,id_bat,nb_adr,nb_bat' }
+    lien: { nom: 'BAN-PLUS:lien_adresse_bati', geo: 'geom', tri: 'id_adr', champs: 'id_adr,id_bat,nb_adr,nb_bat,idu' }
   };
 
   function wkt(poly) {   // [[lat, lon]…] -> POLYGON((lon lat, …)) fermé
@@ -137,7 +137,7 @@ var DataImmo = (function () {
         throw { reessayer: true, message: 'Trop de demandes : le serveur demande de patienter', attenteMs: ra > 0 ? ra * 1000 : 0 };
       }
       if (r.status === 502 || r.status === 503 || r.status === 504) throw { reessayer: true, message: 'Serveur occupé (HTTP ' + r.status + ')' };
-      if (!r.ok) throw { reessayer: r.status >= 500, message: 'Erreur du serveur (HTTP ' + r.status + ')' };
+      if (!r.ok) throw { reessayer: r.status >= 500, statut: r.status, message: 'Erreur du serveur (HTTP ' + r.status + ')' };
       return r.json().catch(function () { throw { reessayer: true, message: 'Réponse incomplète du serveur' }; });
     }, function () {
       throw { reessayer: true, expire: ctrl.signal.aborted, message: ctrl.signal.aborted ? 'Le serveur met trop de temps à répondre' : 'Serveur injoignable (réseau)' };
@@ -169,6 +169,8 @@ var DataImmo = (function () {
     if (p.construction_legere) props.leg = true;
     if (p.nombre_de_logements > 0) props.lgt = p.nombre_de_logements;
     if (p.nombre_d_etages > 0) props.etg = p.nombre_d_etages;
+    // Identifiant(s) du Référentiel national des bâtiments : rattachement exact des DPE
+    if (p.identifiants_rnb) props.rnb = String(p.identifiants_rnb).split(/[\/,;\s]+/).filter(Boolean);
     props._t = TypesBati.classer(props);
     return { type: 'Feature', id: idIgn(p.cleabs), properties: props, geometry: geom };
   }
@@ -224,7 +226,7 @@ var DataImmo = (function () {
     (json.features || []).forEach(function (f) {
       var p = f.properties || {};
       if (!p.id_adr || !p.nom_voie) return;
-      var e = { n: p.numero ? p.numero + (p.rep ? ' ' + String(p.rep).toLowerCase() : '') : '', v: p.nom_voie };
+      var e = { i: p.id_adr, n: p.numero ? p.numero + (p.rep ? ' ' + String(p.rep).toLowerCase() : '') : '', v: p.nom_voie };
       var c = f.geometry && f.geometry.type === 'Point' ? f.geometry.coordinates : null;
       if (c) e.p = [Math.round(c[0] * 1e6) / 1e6, Math.round(c[1] * 1e6) / 1e6];
       table[p.id_adr] = e;
@@ -280,18 +282,22 @@ var DataImmo = (function () {
     var touches = {};
     (json.features || []).forEach(function (f) {
       var p = f.properties || {};
-      if (!p.id_adr || !p.id_bat || !table[p.id_adr]) return;
-      var id = idIgn(p.id_bat);
-      if (!batiments[id]) return;
+      if (!p.id_adr || !p.id_bat) return;
+      var id = idIgn(p.id_bat), b = batiments[id];
+      if (!b) return;
+      // Parcelle cadastrale du bâtiment (sert à rattacher les ventes DVF)
+      if (p.idu) { var pc = b.properties.parc = b.properties.parc || []; if (pc.indexOf(p.idu) < 0) { pc.push(p.idu); touches[id] = true; } }
+      if (!table[p.id_adr]) return;
       (liens[id] = liens[id] || []).push([p.id_adr, (p.nb_bat > 1 && p.nb_adr > 1) ? 1 : 0]);
       touches[id] = true;
     });
     var modifies = [];
     Object.keys(touches).forEach(function (id) {
-      var b = batiments[id], adr = choisirAdresses(b, liens[id], table);
-      if (!adr || !adr.length) return;
+      var b = batiments[id], adr = liens[id] ? choisirAdresses(b, liens[id], table) : null;
+      if (!adr || !adr.length) { modifies.push(b); return; }   // parcelle seulement
       var pr = b.properties, libs = adr.map(function (a) { return (a.n ? a.n + ' ' : '') + a.v; });
-      if (pr.adr && pr.adr.join('|') === libs.join('|')) return;
+      pr.adrIds = adr.map(function (a) { return a.i; }).filter(Boolean);
+      if (pr.adr && pr.adr.join('|') === libs.join('|')) { modifies.push(b); return; }
       pr.adr = libs;
       pr['addr:street'] = adr[0].v;
       if (adr[0].n) pr['addr:housenumber'] = adr[0].n; else delete pr['addr:housenumber'];
@@ -384,6 +390,7 @@ var DataImmo = (function () {
     urlIgn: urlIgn, tenter: tenter, integrerIgn: integrerIgn, lireAdresses: lireAdresses, lierAdresses: lierAdresses,
     urlOsm: urlOsm, corpsOsm: corpsOsm, integrerOsm: integrerOsm,
     correspondancesOsm: correspondancesOsm, estIgn: estIgn, estOsm: estOsm, centreDe: centreDe,
+    distanceBatiment: distanceBatiment, idIgn: idIgn,
     adresse: adresse, adresses: function (props) { return props.adr ? props.adr.slice() : []; }, typeBatiment: typeBatiment,
     estCharge: function (bounds) { return dejaCharge(boite(bounds)); },
     ajouterZone: ajouterZone,

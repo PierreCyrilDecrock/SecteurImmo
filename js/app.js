@@ -36,6 +36,7 @@
       TypesBati.charger(d.types);
       DataImmo.restaurer(d.batiments, d.zones);
       Statuts.charger(d, 'remplacer', true);      // silencieux : déjà en base
+      Statuts.chargerSupprimes(d.supprimes);
       CarteImmo.afficherBatiments(d.batiments);
       CarteImmo.synchroniserManuels(Statuts.manuels());
       if (d.etiquettes) Etiquettes.charger(d.etiquettes, 'remplacer');
@@ -55,6 +56,7 @@
       Notif.afficher('Sauvegarde automatique indisponible dans ce navigateur : pensez à exporter vos données (menu Données).', { type: 'alerte', duree: 9000 });
     }
     Echange.init({ alerter: alerter, fichierLie: d && d.fichierLie });
+    SynchroUi.init();
     Telechargements.demarrer();
     RappelsUi.dessiner();
     CarteUi.majPastille(); CarteUi.majAccueil();

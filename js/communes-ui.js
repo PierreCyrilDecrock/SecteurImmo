@@ -21,7 +21,7 @@ var CommunesUi = (function () {
       Communes.voir(r.commune.code);
       r.tache.then(function (res) {
         var cpt = Communes.compter(r.commune.code);
-        Notif.afficher(r.commune.nom + ' : ' + Ui.nombre(cpt.aProspecter) + ' bâtiments à prospecter (' + Ui.nombre(cpt.total) + ' au total), ' + Ui.nombre(res.adresses) + ' avec leur adresse.', { type: 'succes', cle: 'commune', duree: 8000 });
+        Notif.afficher(r.commune.nom + ' : ' + Ui.nombre(cpt.aProspecter) + ' bâtiments à prospecter (' + Ui.nombre(cpt.total) + ' au total), ' + Ui.nombre(res.adresses) + ' avec leur adresse, ' + Ui.nombre(res.dpe) + ' DPE, ' + Ui.nombre(res.ventes) + ' ventes.', { type: 'succes', cle: 'commune', duree: 8000 });
         if (res.avertissement) Notif.afficher(res.avertissement, { type: 'alerte', duree: 9000 });
       }).catch(function (e) { if (!/annulé/.test(e.message)) Notif.afficher(r.commune.nom + ' : ' + e.message, { type: 'erreur', cle: 'commune', duree: 9000 }); });
     }).catch(function (e) { Notif.afficher(e.message || 'Téléchargement impossible.', { type: 'erreur', cle: 'commune' }); });

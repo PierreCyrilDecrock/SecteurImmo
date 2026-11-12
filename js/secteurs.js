@@ -29,8 +29,9 @@ var Secteurs = (function () {
 
   // ---------- Données ----------
 
+  var supprimes = {};   // id -> date de suppression (synchronisation entre appareils)
   function exporter() {
-    return { secteurs: JSON.parse(JSON.stringify(liste)), options: { colorer: !!options.colorer } };
+    return { secteurs: JSON.parse(JSON.stringify(liste)), options: { colorer: !!options.colorer }, supprimes: Object.assign({}, supprimes) };
   }
 
   // Valide des secteurs venant d'un fichier : renvoie { donnees, ignores }
@@ -45,7 +46,7 @@ var Secteurs = (function () {
       if (!s || typeof s.id !== 'string' || pts.length < 3) { res.ignores++; return; }
       res.donnees.secteurs.push({
         id: s.id.slice(0, 40), nom: String(s.nom || 'Secteur').slice(0, 80), points: pts,
-        couleur: /^#[0-9a-f]{6}$/i.test(s.couleur) ? s.couleur : PALETTE[0]
+        couleur: /^#[0-9a-f]{6}$/i.test(s.couleur) ? s.couleur : PALETTE[0], maj: +s.maj || undefined
       });
     });
     return res;
@@ -56,7 +57,25 @@ var Secteurs = (function () {
     if (mode === 'remplacer') { liste = []; trouActif = null; }
     options.colorer = (d.options && d.options.colorer) || options.colorer;
     (d.secteurs || []).forEach(function (s) { if (!parId(s.id)) liste.push(JSON.parse(JSON.stringify(s))); });
+    if (d.supprimes && typeof d.supprimes === 'object') Object.keys(d.supprimes).forEach(function (id) { supprimes[id] = Math.max(supprimes[id] || 0, +d.supprimes[id] || 0); });
     reconstruire(); structureChangee();
+  }
+
+  // Synchronisation : la version la plus récente de chaque secteur gagne, une suppression plus récente l'efface
+  function fusionner(d) {
+    var n = 0;
+    (d.secteurs || []).forEach(function (s) {
+      var local = parId(s.id), m = +s.maj || 0;
+      if (local) { if (m > (+local.maj || 0)) { liste[liste.indexOf(local)] = JSON.parse(JSON.stringify(s)); n++; } }
+      else if (!(supprimes[s.id] >= m)) { liste.push(JSON.parse(JSON.stringify(s))); n++; }
+    });
+    Object.keys(d.supprimes || {}).forEach(function (id) {
+      var t = +d.supprimes[id] || 0, local = parId(id);
+      if (local && (+local.maj || 0) < t) { liste = liste.filter(function (x) { return x !== local; }); n++; }
+      supprimes[id] = Math.max(supprimes[id] || 0, t);
+    });
+    reconstruire(); structureChangee();
+    return n;
   }
 
   // ---------- Géométrie ----------
@@ -148,18 +167,19 @@ var Secteurs = (function () {
 
   function creer(points, nom) {
     var n = liste.length + 1, id = 's' + Date.now().toString(36);
-    var s = { id: id, nom: (nom || '').slice(0, 80) || 'Secteur ' + n, points: points, couleur: PALETTE[liste.length % PALETTE.length] };
+    var s = { id: id, nom: (nom || '').slice(0, 80) || 'Secteur ' + n, points: points, couleur: PALETTE[liste.length % PALETTE.length], maj: Date.now() };
     liste.push(s);
     reconstruire(); structureChangee();
     return s;
   }
   function renommer(id, nom) {
     var s = parId(id); if (!s) return;
-    s.nom = (nom || '').trim().slice(0, 80) || s.nom;
+    s.nom = (nom || '').trim().slice(0, 80) || s.nom; s.maj = Date.now();
     reconstruire(); structureChangee();
   }
   function supprimer(id) {
     liste = liste.filter(function (s) { return s.id !== id; });
+    supprimes[id] = Date.now();
     if (trouActif === id) trouActif = null;
     reconstruire(); structureChangee();
   }
@@ -278,7 +298,7 @@ var Secteurs = (function () {
   return {
     init: init, surMaj: surMaj, surStructure: surStructure, liste: function () { return liste; }, options: function () { return options; },
     membresDe: function (id) { return membres[id] || []; },
-    exporter: exporter, nettoyer: nettoyer, charger: charger, stats: stats, nonFaits: nonFaits,
+    exporter: exporter, nettoyer: nettoyer, charger: charger, fusionner: fusionner, stats: stats, nonFaits: nonFaits,
     creer: creer, renommer: renommer, supprimer: supprimer, definirOption: definirOption,
     voir: voir, basculerTrous: basculerTrous, trousActifs: trousActifs, suivant: suivant,
     chargerBatiments: chargerBatiments, etatChargement: etatChargement,

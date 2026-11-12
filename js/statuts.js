@@ -76,7 +76,22 @@ var Statuts = (function () {
   }
 
   function signaler(type, ids) { ecouteursDonnees.forEach(function (cb) { cb(type, ids); }); }
-  function notifier(ids, silencieux) {
+  /*
+   * Synchronisation entre appareils : chaque fiche porte la date de sa dernière modification (maj, en ms)
+   * et chaque suppression laisse une trace datée (supprimes), pour que la fusion garde la version la plus récente.
+   * conserver : ne pas horodater (restauration, import, fusion d'une synchronisation).
+   */
+  var supprimes = {};
+  function horodater(ids) {
+    var t = Date.now(), traces = false;
+    ids.forEach(function (id) {
+      if (records[id]) { records[id].maj = t; if (supprimes[id]) { delete supprimes[id]; traces = true; } }
+      else { supprimes[id] = t; traces = true; }
+    });
+    if (traces) signaler('supprimes', []);
+  }
+  function notifier(ids, silencieux, conserver) {
+    if (!silencieux && !conserver) horodater(ids);
     ecouteurs.forEach(function (cb) { cb(ids); });
     if (!silencieux) signaler('records', ids);
   }
@@ -310,12 +325,53 @@ var Statuts = (function () {
     Object.keys(donnees.adresses || {}).forEach(function (id) { if (!adresses[id]) { adresses[id] = donnees.adresses[id]; idsAdresses.push(id); } });
     pile = [];
     if (!silencieux) { signaler('manuels', idsManuels); signaler('adresses', idsAdresses); }
-    notifier(touches, silencieux);
+    notifier(touches, silencieux, true);
     return bilan;
   }
 
+  // Date de dernière modification d'une fiche (anciennes fiches : date du passage)
+  function majDe(r) { return r ? (r.maj || (r.date ? Date.parse(r.date) || 0 : 0)) : 0; }
+
+  /*
+   * Fusion d'une synchronisation : fiches, suppressions, points ajoutés, adresses de l'autre appareil.
+   * Pour chaque fiche, la version la plus récente gagne ; une suppression plus récente qu'une fiche l'efface.
+   * Renvoie { recues, effacees }.
+   */
+  function fusionner(d) {
+    var touches = [], recues = 0, effacees = 0;
+    var recs = d.records || {}, sup = d.supprimes || {};
+    Object.keys(recs).forEach(function (id) {
+      var r = recs[id], local = records[id], m = majDe(r);
+      if (local ? m > majDe(local) : !(supprimes[id] >= m)) { records[id] = copie(r); touches.push(id); recues++; }
+    });
+    Object.keys(sup).forEach(function (id) {
+      var t = +sup[id] || 0;
+      if (records[id] && majDe(records[id]) < t) { delete records[id]; touches.push(id); effacees++; }
+      if (!records[id] && !(supprimes[id] >= t)) supprimes[id] = t;
+    });
+    var idsManuels = [];
+    Object.keys(d.manuels || {}).forEach(function (id) {
+      if (manuels[id] || supprimes[id]) return;
+      var m = d.manuels[id]; if (!m || !isFinite(m.lat) || !isFinite(m.lon)) return;
+      manuels[id] = { lat: +m.lat, lon: +m.lon }; idsManuels.push(id);
+    });
+    Object.keys(manuels).forEach(function (id) { if (sup[id] && !records[id]) { delete manuels[id]; idsManuels.push(id); } });
+    var idsAdresses = [];
+    Object.keys(d.adresses || {}).forEach(function (id) { if (!adresses[id] && typeof d.adresses[id] === 'string') { adresses[id] = d.adresses[id]; idsAdresses.push(id); } });
+    pile = [];
+    signaler('manuels', idsManuels); signaler('adresses', idsAdresses); signaler('supprimes', []);
+    if (touches.length) notifier(touches, false, true);
+    return { recues: recues, effacees: effacees };
+  }
+  // Traces de suppression : gardées 180 jours
+  function chargerSupprimes(d) {
+    var limite = Date.now() - 180 * 86400000;
+    supprimes = {};
+    Object.keys(d || {}).forEach(function (id) { if (+d[id] > limite) supprimes[id] = +d[id]; });
+  }
+
   return {
-    charger: charger, surDonnees: surDonnees, adressesToutes: function () { return adresses; },
+    charger: charger, surDonnees: surDonnees, fusionner: fusionner, supprimes: function () { return supprimes; }, chargerSupprimes: chargerSupprimes, adressesToutes: function () { return adresses; },
     LISTE: LISTE, ORDRE_GRAPHIQUE: ORDRE_GRAPHIQUE, ORDRE_CHOIX: ORDRE_CHOIX, CONTACTS: CONTACTS, QUALIF: QUALIF, libelleQualif: libelleQualif, parId: function (id) { return parId[id] || parId.aucun; },
     get: get, statutDe: statutDe, modifier: modifier,
     estLot: estLot, parent: parent, lotsDe: lotsDe, aDesLogements: aDesLogements, aUneFiche: aUneFiche, poids: poids, avancement: avancement,

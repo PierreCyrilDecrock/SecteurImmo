@@ -39,6 +39,14 @@ var Base = (function () {
       rendu: function (r) { var w = el('span', 'cellule-puces'); r.etiquettes.forEach(function (t) { var x = el('span', 'mini-etiquette', Etiquettes.nom(t)); x.style.setProperty('--c', Etiquettes.couleur(t)); w.appendChild(x); }); return w; } },
     { id: 'note', titre: 'Note', type: 'texte', l: 240, val: function (r) { return r.note; } },
     { id: 'logements', titre: 'Logements', type: 'nombre', l: 104, val: function (r) { return r.logement ? '' : r.nbLogements || ''; } },
+    { id: 'dpe', titre: 'DPE', type: 'enum', l: 84, val: function (r) { return r.dpe; }, triVal: function (r) { return r.dpe || 'Z'; },
+      rendu: function (r) { if (!r.dpe) return null; var b = el('span', 'badge-dpe', r.dpe); b.dataset.e = r.dpe; b.title = r.nbDpe > 1 ? r.nbDpe + ' DPE, le plus mauvais : ' + r.dpe : 'DPE ' + r.dpe; return b; } },
+    { id: 'nbDpe', titre: 'Nb de DPE', type: 'nombre', l: 100, val: function (r) { return r.nbDpe || ''; } },
+    { id: 'periode', titre: 'Construction', type: 'texte', l: 130, val: function (r) { return r.periode; } },
+    { id: 'venteDate', titre: 'Dernière vente', type: 'date', l: 130, val: function (r) { return r.venteDate; }, texte: function (r) { return fmtDate(r.venteDate); } },
+    { id: 'ventePrix', titre: 'Prix de vente', type: 'nombre', l: 120, val: function (r) { return r.ventePrix === null || r.ventePrix === undefined ? '' : r.ventePrix; }, texte: function (r) { return r.ventePrix ? Ui.nombre(r.ventePrix) + ' €' : ''; } },
+    { id: 'venteM2', titre: 'Prix au m²', type: 'nombre', l: 110, val: function (r) { return r.venteM2 || ''; }, texte: function (r) { return r.venteM2 ? Ui.nombre(r.venteM2) + ' €' : ''; } },
+    { id: 'nbVentes', titre: 'Ventes', type: 'nombre', l: 90, val: function (r) { return r.nbVentes || ''; } },
     { id: 'secteurs', titre: 'Secteurs', type: 'liste', l: 160, val: function (r) { return r.secteursNoms; } },
     { id: 'rue', titre: 'Rue', type: 'texte', l: 180, val: function (r) { return r.rue; } },
     { id: 'type', titre: 'Type', type: 'texte', l: 130, val: function (r) { return r.typeLib; } },
@@ -76,6 +84,10 @@ var Base = (function () {
     if (f.statut && f.statut.length && f.statut.indexOf(r.statut) < 0) return false;
     if (f.type && f.type.length && f.type.indexOf(r.type) < 0) return false;
     if (f.logements && !r.logement) return false;
+    if (f.dpe && f.dpe.length && f.dpe.indexOf(r.dpe || '—') < 0) return false;
+    if (f.vente === 'oui' && !r.venteDate) return false;
+    if (f.vente === 'non' && r.venteDate) return false;
+    if (f.vente === '2ans' && (!r.venteDate || r.venteDate < Stats.jourDe(new Date(Date.now() - 730 * 86400000)))) return false;
     var enums = ['potentiel', 'projet', 'echeance', 'occupant'];
     for (var i = 0; i < enums.length; i++) { var k = enums[i]; if (f[k] && f[k].length && f[k].indexOf(r[k] || '—') < 0) return false; }
     if (f.etiquettes && f.etiquettes.length) {
@@ -130,7 +142,7 @@ var Base = (function () {
     filtrees = lignes.filter(function (r) {
       if (!passeFiltres(r)) return false;
       if (!qr) return true;
-      return [r.adresse, r.rue, r.logement, r.typeLib, r.nom, r.tel, r.note, r.secteursNoms, Statuts.parId(r.statut).label, Statuts.libelleQualif('projet', r.projet)]
+      return [r.adresse, r.rue, r.logement, r.typeLib, r.dpe ? 'dpe ' + r.dpe : '', r.nom, r.tel, r.note, r.secteursNoms, Statuts.parId(r.statut).label, Statuts.libelleQualif('projet', r.projet)]
         .concat(r.etiquettes.map(Etiquettes.nom)).join(' ').toLowerCase().indexOf(qr) >= 0;
     });
     trier();
@@ -267,6 +279,7 @@ var Base = (function () {
     options.forEach(function (o) {
       var actif = (etat.filtres[cle] || []).indexOf(o.v) >= 0;
       var contenu = [o.t]; if (o.c) { var d = el('span', 'pastille'); contenu.unshift(d); }
+      if (o.dpe) { var bd = el('span', 'badge-dpe', o.dpe); bd.dataset.e = o.dpe; contenu = [bd]; }
       var b = Ui.bouton(contenu, 'puce', function () { bascule(cle, o.v); }, { 'aria-pressed': actif ? 'true' : 'false', 'data-filtre': cle + ':' + o.v });
       if (o.c) b.style.setProperty('--c', o.c);
       p.appendChild(b);
@@ -283,6 +296,14 @@ var Base = (function () {
     var f = etat.filtres;
     pf.appendChild(groupePuces('Statut', 'statut', Statuts.ORDRE_CHOIX.map(function (s) { return { v: s, t: Statuts.parId(s).court, c: 'var(--st-' + s + ')' }; })));
     pf.appendChild(groupePuces('Type de bâtiment', 'type', TypesBati.LISTE.map(function (t) { return { v: t.id, t: t.court }; })));
+    var gDpe = groupePuces('DPE (étiquette la plus mauvaise)', 'dpe', Enrichissement.ETIQUETTES.map(function (e) { return { v: e, t: e, dpe: e }; }).concat([{ v: '—', t: 'Sans DPE' }]));
+    pf.appendChild(gDpe);
+    var gv = el('div', 'groupe-filtre'); gv.appendChild(el('span', 'etiquette', 'Ventes (DVF, depuis 2021)'));
+    var pv = el('div', 'puces');
+    [['2ans', 'Moins de 2 ans'], ['oui', 'Vendu depuis 2021'], ['non', 'Pas de vente']].forEach(function (x) {
+      pv.appendChild(Ui.bouton(x[1], 'puce', function () { f.vente = f.vente === x[0] ? '' : x[0]; appliquer(); dessinerFiltres(); }, { 'aria-pressed': f.vente === x[0] ? 'true' : 'false', 'data-filtre': 'vente:' + x[0] }));
+    });
+    gv.appendChild(pv); pf.appendChild(gv);
     var vide = { v: '—', t: 'Non renseigné' };
     ['potentiel', 'projet', 'echeance', 'occupant'].forEach(function (k) {
       pf.appendChild(groupePuces(Statuts.QUALIF[k].titre, k, Statuts.QUALIF[k].valeurs.map(function (x) { return { v: x[0], t: x[1], c: k === 'potentiel' ? POT[x[0]][1] : null }; }).concat([vide])));
@@ -332,6 +353,8 @@ var Base = (function () {
     function ajouter(t, retirer) { libs.push(1); w.appendChild(Ui.bouton([t, icone('x', 'ic-sm')], 'puce puce-active', function () { retirer(); appliquer(); dessinerFiltres(); }, { 'aria-label': 'Retirer le filtre ' + t })); }
     (f.statut || []).forEach(function (s) { ajouter(Statuts.parId(s).court, function () { bascule('statut', s); }); });
     (f.type || []).forEach(function (t) { ajouter(TypesBati.parId(t).court, function () { bascule('type', t); }); });
+    (f.dpe || []).forEach(function (e) { ajouter(e === '—' ? 'Sans DPE' : 'DPE ' + e, function () { bascule('dpe', e); }); });
+    if (f.vente) ajouter({ '2ans': 'Vendu il y a moins de 2 ans', oui: 'Vendu depuis 2021', non: 'Pas de vente depuis 2021' }[f.vente], function () { f.vente = ''; });
     ['potentiel', 'projet', 'echeance', 'occupant'].forEach(function (k) { (f[k] || []).forEach(function (v) { ajouter(Statuts.QUALIF[k].titre + ' : ' + (v === '—' ? 'non renseigné' : Statuts.libelleQualif(k, v).toLowerCase()), function () { bascule(k, v); }); }); });
     (f.etiquettes || []).forEach(function (t) { ajouter(Etiquettes.nom(t), function () { bascule('etiquettes', t); }); });
     (f.secteurs || []).forEach(function (s) { var x = Secteurs.liste().filter(function (y) { return y.id === s; })[0]; ajouter(s === '—' ? 'Hors secteur' : x ? x.nom : 'Secteur', function () { bascule('secteurs', s); }); });

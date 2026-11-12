@@ -8,7 +8,7 @@ var TelechargementsUi = (function () {
   'use strict';
 
   var el = Ui.el, icone = Ui.icone, boite, timer = null, dernierMessage = null;
-  var ETAPES = { bat: 'Bâtiments', adr: 'Adresses', lien: 'Rattachement des adresses' };
+  var ETAPES = { bat: 'Bâtiments', adr: 'Adresses', lien: 'Rattachement des adresses', dpe: 'Diagnostics énergétiques (DPE)', dvf: 'Ventes (DVF), sections cadastrales' };
 
   function titre(t) { return t.type === 'commune' ? t.nom : t.type === 'secteur' ? 'Secteur « ' + t.nom + ' »' : 'Zone affichée'; }
   function duree(ms) {

@@ -39,7 +39,7 @@ function versIgn(els) {
       // Point d'entrée : au milieu du côté sud du bâtiment
       const g = x.geometry, pt = [(g[0].lon + g[1].lon) / 2, g[0].lat];
       adr.push({ type: 'Feature', id: 'adresse.' + x.id, geometry: { type: 'Point', coordinates: pt }, properties: { id_adr: ia, numero: +t['addr:housenumber'] || null, rep: t['test:rep'] || null, nom_voie: t['addr:street'], insee_com: '44999' }, c: x.geometry[0], parcelle: t['test:parcelle'] });
-      if (!t['test:parcelle']) lien.push({ type: 'Feature', id: 'lien.' + x.id, geometry: null, properties: { id_adr: ia, id_bat: p.cleabs, nb_adr: 1, nb_bat: 1 }, c: x.geometry[0] });
+      if (!t['test:parcelle']) lien.push({ type: 'Feature', id: 'lien.' + x.id, geometry: null, properties: { id_adr: ia, id_bat: p.cleabs, nb_adr: 1, nb_bat: 1, idu: '44999000AB' + String(x.id).padStart(4, '0') }, c: x.geometry[0] });
     }
   });
   // Parcelle partagée (« test:parcelle ») : comme l'IGN, chaque adresse est reliée à chaque bâtiment de la parcelle
@@ -48,7 +48,7 @@ function versIgn(els) {
   Object.keys(parcelles).forEach(k => {
     const bs = parcelles[k], as = adr.filter(a => a.parcelle === k);
     as.forEach(a => bs.forEach(x => lien.push({ type: 'Feature', id: 'lien.' + a.properties.id_adr + '.' + x.id, geometry: null,
-      properties: { id_adr: a.properties.id_adr, id_bat: 'BATIMENT' + String(x.id).padStart(16, '0'), nb_adr: as.length, nb_bat: bs.length }, c: a.c })));
+      properties: { id_adr: a.properties.id_adr, id_bat: 'BATIMENT' + String(x.id).padStart(16, '0'), nb_adr: as.length, nb_bat: bs.length, idu: '44999000AC' + k.padStart(4, '0') }, c: a.c })));
   });
   adr.forEach(a => { delete a.parcelle; });
   return { 'BDTOPO_V3:batiment': bat, 'BAN-PLUS:adresse': adr, 'BAN-PLUS:lien_adresse_bati': lien };
@@ -85,7 +85,8 @@ function contourCommune() {
 async function demarrer(port) {
   const srv = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: RACINE, stdio: 'ignore' });
   await new Promise(r => setTimeout(r, 900));
-  const b = await chromium.launch();
+  // Adresses IP locales visibles en WebRTC (synchronisation) ; caméra simulée
+  const b = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   return { b, srv, url: 'http://localhost:' + port + '/', fermer: async () => { await b.close(); srv.kill(); } };
 }
 
@@ -122,6 +123,21 @@ async function page(env, opts = {}) {
     const u = r.request().url();
     if (/\/communes\/\d+/.test(u)) return r.fulfill({ json: Object.assign({}, COMMUNE, { contour: contourCommune() }) });
     r.fulfill({ json: [COMMUNE, { nom: 'Testville-sur-Mer', code: '44998', codesPostaux: ['44998'], population: 80, departement: { nom: 'Loire-Atlantique' } }] });
+  });
+  // DPE : un par maison ayant une étiquette « test:dpe » (rattaché par l'identifiant d'adresse BAN)
+  const dpe = els.filter(x => (x.tags || {})['test:dpe']).map((x, i) => ({ numero_dpe: 'DPE' + x.id, identifiant_ban: '44999_' + x.id,
+    numero_voie_ban: (x.tags || {})['addr:housenumber'] || null, nom_rue_ban: (x.tags || {})['addr:street'] || null, etiquette_dpe: x.tags['test:dpe'], etiquette_ges: 'C',
+    date_etablissement_dpe: '2024-0' + (1 + i % 9) + '-15', type_batiment: x.tags.building === 'apartments' ? 'appartement' : 'maison', surface_habitable_logement: 90 + i,
+    periode_construction: '1948-1974', complement_adresse_logement: null, id_rnb: null, _geopoint: x.geometry[0].lat + ',' + x.geometry[0].lon }));
+  await p.route('https://data.ademe.fr/**', r => { p.appels.dpe = (p.appels.dpe || 0) + 1; if (opts.dpe) return opts.dpe(r); r.fulfill({ json: { total: dpe.length, results: dpe } }); });
+  // DVF : une vente par maison ayant « test:vente » (prix), sur sa parcelle
+  await p.route('https://app.dvf.etalab.gouv.fr/**', r => {
+    p.appels.dvf = (p.appels.dvf || 0) + 1;
+    const section = r.request().url().split('/').pop();
+    const mutations = els.filter(x => (x.tags || {})['test:vente'] && section === '000AB').map(x => ({ id_mutation: 'M' + x.id, date_mutation: '2025-03-1' + (x.id % 9), nature_mutation: 'Vente',
+      valeur_fonciere: x.tags['test:vente'], adresse_numero: (x.tags || {})['addr:housenumber'] || 'None', adresse_suffixe: 'None', adresse_nom_voie: String((x.tags || {})['addr:street'] || '').toUpperCase(),
+      id_parcelle: '44999000AB' + String(x.id).padStart(4, '0'), type_local: 'Maison', surface_reelle_bati: '100', nombre_pieces_principales: '5' }));
+    r.fulfill({ json: { mutations } });
   });
   await p.route('https://overpass-api.de/**', r => { p.appels.overpass++; if (opts.overpass) return opts.overpass(r, p.appels.overpass, repondre); repondre(r); });
   await p.route('https://overpass.kumi.systems/**', r => { p.appels.overpass++; if (opts.overpassMiroir) return opts.overpassMiroir(r); repondre(r); });

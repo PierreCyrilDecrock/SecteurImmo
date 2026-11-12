@@ -52,6 +52,11 @@ var Stats = (function () {
       var rue = (f && f.properties['addr:street'] ? f.properties['addr:street'].replace(/[\s,]*\b\d{5}\b.*$/, '').trim() : '') || rueDe(adr[id]);
       var type = man[id] && !r.type ? 'maison' : TypesBati.typeDe(id), nLog = Statuts.avancement(id).total;
       var commun = { adresse: texteAdr, rue: rue || '', secteurs: secteursDe[id] || [], lat: c ? c[0] : null, lon: c ? c[1] : null, type: type, nbLogements: nLog, parent: id };
+      // Données publiques du bâtiment : DPE (étiquette la plus mauvaise), dernière vente DVF
+      var dv = Enrichissement.derniereVente(id);
+      commun.dpe = Enrichissement.pireEtiquette(id) || ''; commun.nbDpe = Enrichissement.dpeDe(id).length; commun.periode = Enrichissement.periode(id);
+      commun.venteDate = dv ? dv.d : ''; commun.ventePrix = dv ? dv.v : null; commun.venteM2 = dv && dv.s && !/^\d/.test(dv.t) ? Math.round(dv.v / dv.s) : null;
+      commun.nbVentes = Enrichissement.ventesDe(id).length;
       res.push(Object.assign(element(id, r), commun, { poids: Statuts.poids(id), logements: r.logements || 0 }));
       Statuts.lotsDe(id).forEach(function (l) {
         res.push(Object.assign(element(l, recs[l] || {}), commun, { poids: 1, logement: (recs[l] || {}).libelle || 'Logement', logements: 0 }));

@@ -873,6 +873,98 @@ rubrique('Types de bâtiments et immeubles', async (env) => {
   await p.ctx.close();
 });
 
+rubrique('DPE et ventes (DVF)', async (env) => {
+  const els = grille(3, 4, 100, ['Rue des Lilas', 'Avenue du Parc', null]);
+  els[0].tags['test:dpe'] = 'G'; els[0].tags['test:vente'] = '250000';
+  els[5].tags['test:dpe'] = 'C'; els[6].tags['test:vente'] = '180000';
+  const p = await page(env, { batiments: els });
+  await p.evaluate(() => { Telechargements.config.pauseMs = 20; });
+  await chargerZone(p);
+  ok(await p.evaluate(() => Enrichissement.etiquette('bdt/100') === 'G' && Enrichissement.etiquette('bdt/105') === 'C') && p.appels.dpe >= 1, 'DPE rattachés aux bâtiments (identifiant d\'adresse BAN)');
+  ok(await p.evaluate(() => Enrichissement.ventesDe('bdt/100')[0].v === 250000 && Enrichissement.ventesDe('bdt/106').length === 1 && !Enrichissement.ventesDe('bdt/101').length) && p.appels.dvf >= 1, 'ventes DVF rattachées par la parcelle');
+  await clicMaison(p, 'bdt/100'); await p.waitForSelector('#panneau.ouverte');
+  const fiche = await p.locator('#panneau').innerText();
+  ok(/DPE G/.test(fiche) && /Passoire thermique/.test(fiche) && /Source : ADEME/.test(fiche), 'fiche : étiquette DPE, alerte passoire thermique, source');
+  ok(/250\s000\s€/.test(fiche) && /2\s500\s€\/m²/.test(fiche), 'fiche : vente, prix et prix au m²');
+  await p.keyboard.press('Escape');
+  await p.selectOption('#filtre-carte', 'dpe:FG');
+  ok(await p.evaluate(() => CarteImmo.nbDessines()) === 1, 'carte : filtre « Passoires : DPE F ou G »');
+  await p.selectOption('#filtre-carte', 'vente:oui');
+  ok(await p.evaluate(() => CarteImmo.nbDessines()) === 2, 'carte : filtre « Vendu depuis 2021 »');
+  await p.selectOption('#filtre-carte', '');
+  await p.click('.rail [data-nav=base]'); await p.waitForSelector('.base-corps .base-ligne');
+  await p.click('#base-btn-filtres'); await p.click('[data-filtre="dpe:G"]');
+  ok(await p.locator('.base-corps .base-ligne').count() === 1, 'base : filtre DPE G');
+  await p.click('[data-filtre="dpe:G"]'); await p.click('[data-filtre="vente:oui"]');
+  ok(await p.locator('.base-corps .base-ligne').count() === 2, 'base : filtre « Vendu depuis 2021 »');
+  await p.click('#base-btn-filtres');
+  await p.click('#base-btn-colonnes'); await p.check('.base-pop-colonnes input[data-col="dpe"]'); await p.check('.base-pop-colonnes input[data-col="ventePrix"]'); await p.keyboard.press('Escape');
+  ok(await p.locator('.base-corps .badge-dpe').count() >= 1 && /250\s000\s€/.test(await p.locator('.base-corps').innerText()), 'base : colonnes DPE et prix de vente');
+  // DPE indisponible : non bloquant
+  const q = await page(env, { batiments: els, dpe: (r) => r.fulfill({ status: 500, body: '' }) });
+  await q.evaluate(() => { Telechargements.config.pauseMs = 20; Telechargements.config.delaiBaseMs = 20; });
+  await chargerZone(q);
+  await q.waitForTimeout(300);
+  ok(await q.evaluate(() => CarteImmo.total()) === 12 && (await q.locator('.notif .texte').allInnerTexts()).some(t => /DPE\) incomplets/.test(t)), 'service DPE en panne : bâtiments chargés, avertissement');
+  ok(!p.erreurs.length && !q.erreurs.length, 'aucune erreur JavaScript (' + p.erreurs.concat(q.erreurs).join(' | ') + ')');
+  await p.ctx.close(); await q.ctx.close();
+});
+
+rubrique('Synchronisation entre appareils (QR code)', async (env) => {
+  const A = await page(env);
+  const B = await page(env, { batiments: grille(3, 4, 100, ['Rue des Lilas', 'Avenue du Parc', null]).concat(grille(1, 2, 500, ['Rue B'], 0.002)) });
+  for (const x of [A, B]) await x.evaluate(() => { Telechargements.config.pauseMs = 20; });
+  await chargerZone(A); await chargerZone(B);
+  await B.evaluate(() => { const m = CarteImmo.getMap(); m.setView([47.2184, -1.5536 + 0.0022], 19, { animate: false }); return Telechargements.zone(m.getBounds()); });
+  await A.evaluate(() => { Statuts.modifier(['bdt/100'], { statut: 'contact', nom: 'Mme A' }); Statuts.modifier(['bdt/101'], { statut: 'prospectus' }); Statuts.modifier(['bdt/103'], { statut: 'absent' }); });
+  await A.waitForTimeout(30);
+  await B.evaluate(() => { Statuts.modifier(['bdt/101'], { statut: 'refus' }); Statuts.modifier(['bdt/102'], { statut: 'absent' }); Secteurs.creer([[47.218, -1.554], [47.218, -1.552], [47.219, -1.552]], 'Secteur B'); });
+  // Une synchronisation : A affiche son code, B le lit et répond, A lit la réponse (ici par copier-coller)
+  const ouvrirSynchro = async (x) => { if (!(await x.locator('#btn-synchro').isVisible())) await tiroir(x, 'donnees'); await x.click('#btn-synchro'); };
+  async function synchroniser() {
+    await ouvrirSynchro(A); await A.click('#synchro-commencer');
+    await A.waitForSelector('#synchro-qr[data-code] canvas', { timeout: 15000 });
+    const offre = await A.locator('#synchro-qr').getAttribute('data-code');
+    await ouvrirSynchro(B); await B.click('#synchro-scanner');
+    await B.click('.synchro-coller summary'); await B.fill('#synchro-code-colle', offre); await B.click('#synchro-valider-code');
+    await B.waitForSelector('#dlg-synchro[data-mode=reponse] #synchro-qr[data-code]', { timeout: 15000 });
+    const rep = await B.locator('#synchro-qr').getAttribute('data-code');
+    await A.click('.synchro-coller summary'); await A.fill('#synchro-code-colle', rep); await A.click('#synchro-valider-code');
+    await A.waitForSelector('#dlg-synchro[data-mode=termine]', { timeout: 30000 }); await B.waitForSelector('#dlg-synchro[data-mode=termine]', { timeout: 30000 });
+    return offre;
+  }
+  const offre = await synchroniser();
+  ok(offre.length < 400 && /^SI1\|O\|/.test(offre), 'code de connexion compact (' + offre.length + ' caractères) : petit QR code');
+  // Le QR code affiché se relit avec jsQR (le chemin utilisé par la caméra quand le navigateur n'a pas de lecteur intégré)
+  const relu = await A.evaluate(async () => {
+    await new Promise((ok) => { const s = document.createElement('script'); s.src = 'vendor/jsqr/jsQR.js'; s.onload = ok; document.head.appendChild(s); });
+    const c = document.createElement('canvas'), d = document.createElement('div'); document.body.appendChild(d);
+    const code = 'SI1|O|test|' + 'x'.repeat(22) + '|' + btoa('y'.repeat(32)) + '|1 udp 2122260223 192.168.1.20 54400 host';
+    const qr = qrcode(0, 'M'); qr.addData(code, 'Byte'); qr.make();
+    const n = qr.getModuleCount(), pas = 6; c.width = c.height = pas * (n + 8); const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) g.fillRect((x + 4) * pas, (y + 4) * pas, pas, pas);
+    const r = jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+    return r && r.data === code;
+  });
+  ok(relu, 'QR code dessiné puis relu (jsQR)');
+  const bilanA = await A.locator('.synchro-bilan').innerText(), bilanB = await B.locator('.synchro-bilan').innerText();
+  ok(/2 bâtiments/.test(bilanA) && /1 secteur/.test(bilanA) && /Envoyé : .*2 bâtiments/.test(bilanB.replace(/\n/g, ' ')), 'bilan : bâtiments manquants et secteur transférés');
+  const etat = (x) => x.evaluate(() => JSON.stringify({ s: ['bdt/100', 'bdt/101', 'bdt/102', 'bdt/103'].map(Statuts.statutDe), nom: (Statuts.get('bdt/100') || {}).nom, sect: Secteurs.liste().map(s => s.nom), bat: CarteImmo.ids(true).length }));
+  const ea = await etat(A), eb = await etat(B);
+  ok(ea === eb && JSON.parse(ea).s.join() === 'contact,refus,absent,absent' && JSON.parse(ea).bat === 14, 'mêmes données des deux côtés, la modification la plus récente gagne (' + ea + ')');
+  // Suppression propagée : B efface une fiche, nouvelle synchronisation
+  await A.click('#synchro-fermer'); await B.click('#synchro-fermer');
+  await B.evaluate(() => Statuts.modifier(['bdt/103'], { statut: 'aucun' }));
+  await synchroniser();
+  ok(await A.evaluate(() => Statuts.statutDe('bdt/103')) === 'aucun', 'suppression propagée à l\'autre appareil');
+  await A.click('#synchro-fermer'); await B.click('#synchro-fermer');
+  await A.waitForTimeout(600); await recharger(A);
+  ok(await A.evaluate(() => Statuts.statutDe('bdt/101') === 'refus' && Secteurs.liste().length === 1 && CarteImmo.ids(true).length === 14), 'données synchronisées conservées au rechargement');
+  ok(!A.erreurs.length && !B.erreurs.length, 'aucune erreur JavaScript (' + A.erreurs.concat(B.erreurs).join(' | ') + ')');
+  await A.ctx.close(); await B.ctx.close();
+});
+
 rubrique('Accessibilité (axe-core) et performance', async (env) => {
   const p = await page(env);
   await chargerZone(p);

@@ -175,6 +175,13 @@ var CarteUi = (function () {
     var g2 = Ui.el('optgroup'); g2.label = 'Projet';
     Statuts.QUALIF.projet.valeurs.filter(function (x) { return x[0] !== 'aucun'; }).forEach(function (x) { opt('projet:' + x[0], x[1], g2); });
     filtreSelect.appendChild(g2);
+    // Données publiques : DPE et ventes
+    var g4 = Ui.el('optgroup'); g4.label = 'Énergie (DPE)';
+    opt('dpe:FG', 'Passoires : DPE F ou G', g4); opt('dpe:E', 'DPE E', g4); opt('dpe:ABCD', 'DPE A à D', g4); opt('dpe:aucun', 'Sans DPE connu', g4);
+    filtreSelect.appendChild(g4);
+    var g5 = Ui.el('optgroup'); g5.label = 'Ventes (DVF)';
+    opt('vente:2ans', 'Vendu il y a moins de 2 ans', g5); opt('vente:oui', 'Vendu depuis 2021', g5); opt('vente:non', 'Pas de vente depuis 2021', g5);
+    filtreSelect.appendChild(g5);
     if (Etiquettes.liste().length) {
       var g3 = Ui.el('optgroup'); g3.label = 'Étiquette';
       Etiquettes.liste().forEach(function (e) { opt('etiquette:' + e.id, e.nom, g3); });
@@ -188,11 +195,27 @@ var CarteUi = (function () {
     legende.classList.toggle('filtre-actif', !!v);
     if (!v) { CarteImmo.definirFiltre(null); return; }
     var champ = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':') + 1);
+    if (champ === 'dpe' || champ === 'vente') { CarteImmo.definirFiltre(filtreDonnees(champ, val)); return; }
     CarteImmo.definirFiltre(function (id) {
       var r = Statuts.get(id);
       if (!r) return false;
       return champ === 'etiquette' ? (r.etiquettes || []).indexOf(val) >= 0 : r[champ] === val;
     });
+  }
+
+  // Filtres sur les données publiques d'un bâtiment (DPE, ventes DVF)
+  function filtreDonnees(champ, val) {
+    if (champ === 'dpe') return function (id) {
+      var e = Enrichissement.pireEtiquette(id);
+      if (val === 'aucun') return !e;
+      return !!e && val.indexOf(e) >= 0;
+    };
+    var limite = new Date(); limite.setFullYear(limite.getFullYear() - 2);
+    var j = limite.toISOString().slice(0, 10);
+    return function (id) {
+      var v = Enrichissement.derniereVente(id);
+      return val === 'non' ? !v : val === '2ans' ? !!v && v.d >= j : !!v;
+    };
   }
 
   // ---------- Accueil (aucune maison encore chargée) ----------
